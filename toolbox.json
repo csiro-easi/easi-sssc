@@ -1,0 +1,77 @@
+{
+    // (int) generated identifier for the toolbox
+    "id": 1234,
+
+    // Basic information about the scientific code
+    //
+    // name        -- (string) short name
+    // description -- (string) description of the scientific code
+    // homepage    -- (string url) homepage of the code
+    // license     -- (string) url or description of the code license
+    //
+    "name": "toolbox1",
+    "description": "lorem ipsum...",
+    "homepage": "http://...",
+    "license": "http://...",
+
+    // Source repository containing the code
+    //
+    // type   -- (string enum) type of repository
+    // url    -- (string url) URL to check out from the repository
+    // branch -- (optional string) branch name in a git repo
+    // tag    -- (optional string) tag to checkout
+    //
+    "source": {
+        "type": "git"|"svn",
+        "url": "http://...",
+        "branch": "foo",
+        "tag": "foo",
+    },
+
+    // List of dependencies required to run the code.
+    //
+    // Currently system packages and python packages from pypi are
+    // supported as dependencies specifications.
+    //
+    // Each dependency is specified by an object, whose "type" entry
+    // indicates how to handle the dependency.
+    //
+    // A package (system or python) is specified by name and version.
+    //
+    // A set of python dependencies can be specified by supplying a
+    // "path" entry for a dependency of type "python". It should be
+    // the path to a requirements.txt file in the source
+    // codebase. Either "path" or "name" (and "version") should be
+    // specified for a python entry.
+    //
+    // The list of dependencies implies an order, but we don't
+    // guarantee that they will be installed in order at
+    // present. System packages will be installed before python
+    // dependencies, so any requirements for the python packages
+    // should be included explicitly as system dependencies.
+    //
+    // type    -- (string enum) type of dependency (system, python)
+    // name    -- (string) package name
+    // version -- (string) package version
+    // path    -- (string) path to requirements.txt
+    //
+    "dependencies": [
+        {
+            "type": "system"|"python",
+            "name": "package1",
+            "version": "1.2.3",
+            "path": "/path/to/requirements.txt"
+        }
+    ],
+
+    // This entry includes metadata about the SCM entry itself.
+    //
+    // author  -- (string) who submitted the toolbox
+    // version -- (string) generated version number
+    // date    -- (string datetime) date toolbox was submitted to the SCM
+    "metadata": {
+        "author": "Joe Bloggs",
+        "version": "1.0",
+        "date": "20140101"
+    }
+}
