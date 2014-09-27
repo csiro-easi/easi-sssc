@@ -1,0 +1,25 @@
+{
+    "name": "TCRM",
+    "description": "Tropical Cyclone Risk Model",
+    "homepage": "https://github.com/GeoscienceAustralia/tcrm",
+    "license": "https://github.com/GeoscienceAustralia/tcrm/blob/master/LICENSE",
+
+    "source": {
+        "type": "GIT",
+        "url": "https://github.com/GeoscienceAustralia/tcrm.git",
+        "branch": "master"
+    },
+
+    "dependencies": [
+        {
+            "type": "PYTHON",
+            "path": "requirements.txt"
+        }
+    ],
+
+    "metadata": {
+        "author": "Geoff Squire",
+        "version": "1.0",
+        "date": "20140925"
+    }
+}
