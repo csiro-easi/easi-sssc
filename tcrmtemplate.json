@@ -1,0 +1,11 @@
+{
+    "name": "TCRM",
+    "description": "Run a TCRM job.",
+    "homepage": "https://github.com/GeoscienceAustralia/tcrm",
+    "toolbox": "5423ba1ab7601af81d0eeb01",
+    "metadata": {
+        "author": "Geoff Squire",
+        "version": "1.0",
+        "date": "20140925"
+    }
+}
