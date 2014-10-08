@@ -3,9 +3,17 @@
     "description": "Run a TCRM job.",
     "homepage": "https://github.com/GeoscienceAustralia/tcrm",
     "toolbox": "5423ba1ab7601af81d0eeb01",
+    "template": "http://www.scm.com/template/42/script",
+    "variables": [
+        {
+            "name": "var1",
+            "type": "int",
+            "min": 0,
+            "max": 42
+        }
+    ]
     "metadata": {
         "author": "Geoff Squire",
         "version": "1.0"
     }
 }
-
