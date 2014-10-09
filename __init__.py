@@ -1,14 +1,10 @@
 from flask import Flask
-from flask.ext.mongoengine import MongoEngine
-from flask.ext.restful import Api
+from flask.ext.pymongo import PyMongo
 
 app = Flask(__name__)
-app.config["MONGODB_SETTINGS"] = {
-    "DB": "scm"
-}
+app.config["MONGO_DBNAME"] = "scm"
 
-db = MongoEngine(app)
-
+mongo = PyMongo(app)
 
 # # API via flask-restful
 # def register_api(app):
