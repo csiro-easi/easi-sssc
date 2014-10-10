@@ -1,6 +1,6 @@
 {
-    // (int) generated identifier for the template
-    "id": 1234,
+    // ID for the template should be a resolvable URL
+    "@id": "http://example.org/templates/abcdefghijklmnop",
 
     // Basic information about the template
     //
@@ -26,7 +26,8 @@
     // Each dependency is specified by an object, whose "type" entry
     // indicates how to handle the dependency.
     //
-    // A package (system or python) is specified by name and version.
+    // A package (system or python) is specified by name and
+    // version. A toolbox dependency is specified using a link.
     //
     // A set of python dependencies can be specified by supplying a
     // "path" entry for a dependency of type "python". It should be
@@ -40,28 +41,36 @@
     // dependencies, so any requirements for the python packages
     // should be included explicitly as system dependencies.
     //
-    // type    -- (string enum) type of dependency (system, python)
+    // type    -- (string enum) type of dependency (system, python, toolbox)
     // name    -- (string) package name
     // version -- (string) package version
-    // path    -- (string) path to requirements.txt
+    // uri     -- (string url) id of the toolbox we depend on
     //
     "dependencies": [
         {
-            "type": "system"|"python",
+            "type": "system",
             "name": "package1",
-            "version": "1.2.3",
-            "path": "/path/to/requirements.txt"
+            "version": "1.2.3"
+        },
+        {
+            "type": "python",
+            "name": "package1",
+            "version": "1.2.3"
+        }
+        {
+            "type": "toolbox",
+            "uri": "http://example.org/toolbox/abcde"
         }
     ],
 
     // This entry includes metadata about the SCM entry itself.
     //
-    // author  -- (string) who submitted the template
-    // version -- (string) generated version number
-    // date    -- (string datetime) date template was submitted to the SCM
+    // author       -- (string) who submitted the template
+    // version      -- (string) generated version number
+    // create_at    -- (string datetime) date template was submitted to the SCM
     "metadata": {
         "author": "Joe Bloggs",
         "version": "1.0",
-        "date": "20140101"
+        "created_at": "20140101"
     }
 }

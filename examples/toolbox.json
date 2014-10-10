@@ -1,31 +1,34 @@
 {
-    // (int) generated identifier for the toolbox
-    "id": 1234,
+    // ID of this toolbox entry, should be a URL to retrieve the entry
+    "@id": "http://example.org/toolbox/abcde",
 
     // Basic information about the scientific code
     //
     // name        -- (string) short name
     // description -- (string) description of the scientific code
     // homepage    -- (string url) homepage of the code
-    // license     -- (string) url or description of the code license
     //
     "name": "toolbox1",
     "description": "lorem ipsum...",
     "homepage": "http://...",
-    "license": "http://...",
 
-    // Source repository containing the code
+    // Source of the scientific code this toolbox implements.
     //
-    // type   -- (string enum) type of repository
-    // url    -- (string url) URL to check out from the repository
-    // branch -- (optional string) branch name in a git repo
-    // tag    -- (optional string) tag to checkout
+    // Note that a git branch is (probably) not fixed, so a tag should
+    // be preferred in order to be able to always retrieve the same
+    // version of the source.
+    //
+    // type     -- (string enum) type of repository (git, svn)
+    // url      -- (string url) URL to check out from the repository
+    // checkout -- (string) checkout target (git branch/tag, svn revision)
+    // license  -- (string) url or description of the code license
     //
     "source": {
         "type": "git"|"svn",
         "url": "http://...",
         "branch": "foo",
         "tag": "foo",
+        "license": "http://...",
     },
 
     // List of dependencies required to run the code.
@@ -50,17 +53,30 @@
     // dependencies, so any requirements for the python packages
     // should be included explicitly as system dependencies.
     //
-    // type    -- (string enum) type of dependency (system, python)
+    // type    -- (string enum) type of dependency (system, python, toolbox)
     // name    -- (string) package name
     // version -- (string) package version
     // path    -- (string) path to requirements.txt
+    // uri     -- (string url) id of another toolbox we depend on
     //
     "dependencies": [
         {
-            "type": "system"|"python",
+            "type": "system",
             "name": "package1",
-            "version": "1.2.3",
+            "version": "1.2.3"
+        },
+        {
+            "type": "python",
+            "name": "package1",
+            "version": "1.2.3"
+        },
+        {
+            "type": "python",
             "path": "/path/to/requirements.txt"
+        }
+        {
+            "type": "toolbox",
+            "uri": "http://example.org/toolbox/abcde"
         }
     ],
 
@@ -72,6 +88,6 @@
     "metadata": {
         "author": "Joe Bloggs",
         "version": "1.0",
-        "date": "20140101"
+        "created_at": "20140101"
     }
 }
