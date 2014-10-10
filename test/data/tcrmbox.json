@@ -5,20 +5,15 @@
     "license": "https://github.com/GeoscienceAustralia/tcrm/blob/master/LICENSE",
 
     "source": {
-        "type": "GIT",
+        "type": "git",
         "url": "https://github.com/GeoscienceAustralia/tcrm.git",
-        "branch": "master"
+        "checkout": "v1.0rc1"
     },
 
     "dependencies": [
         {
-            "type": "PYTHON",
+            "type": "python",
             "path": "requirements.txt"
         }
-    ],
-
-    "metadata": {
-        "author": "Geoff Squire",
-        "version": "1.0"
-    }
+    ]
 }

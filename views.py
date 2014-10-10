@@ -1,37 +1,15 @@
-from flask import Blueprint, request, render_template, url_for, jsonify
+from flask import Blueprint, request, render_template, url_for, jsonify, make_response
 from flask.views import MethodView
 from scm import mongo
+from scm.models import Toolbox, Template, Entry
 from werkzeug.exceptions import NotAcceptable
 
 entries = Blueprint('entries', __name__, template_folder='templates')
 
-endpoint_map = {
-    'Entry.Toolbox': 'entries.toolbox',
-    'Entry.Template': 'entries.template'
+model_endpoint = {
+    'Toolbox': 'entries.toolbox',
+    'Template': 'entries.template'
 }
-
-
-def api_filter(entry):
-    api_fields = {
-        '_id': ('@id', entry_url(entry)),
-        '_cls': None,
-        'toolbox': lambda _, v: id_url('entries.toolbox', v)
-    }
-
-    def f(k, v):
-        if k in api_fields:
-            g = api_fields.get(k)
-            if callable(g):
-                g = g(k, v)
-            if g is None:
-                return None
-            elif isinstance(g, tuple):
-                return g
-            else:
-                return k, g
-        else:
-            return k, v
-    return dict(filter(None, [f(k, v) for k, v in entry.items()]))
 
 
 def id_url(endpoint, value):
@@ -39,58 +17,69 @@ def id_url(endpoint, value):
     return url_for(endpoint, _external=True, entry_id=value)
 
 
-def entry_endpoint(entry):
-    """Return the endpoint for a type of entry."""
-    return endpoint_map.get(entry.get('_cls'))
-
-
-def entry_url(entry):
-    """Return the id URL for entry at endpoint."""
-    return id_url(entry_endpoint(entry), entry.get('_id'))
-
-
 class EntriesView(MethodView):
+
+    model = Entry
+
     """Handle all entries."""
-    def get(self, format=None):
-        entries = self._query()
+    @classmethod
+    def get(cls, format=None):
+        entries = cls.query()
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
         if best == "application/json":
-            return jsonify(dict([(entry_url(e), api_filter(e))
+            return jsonify(dict([(cls.entry_url(e), cls.model.for_api(e))
                                  for e in entries]))
         elif best == "text/html":
             return render_template('entries/list.html', entries=entries)
         else:
             return NotAcceptable
 
-    def post(self):
-        """Add a new entry."""
-        pass
+    @classmethod
+    def post(cls):
+        """Adds the new entry."""
+        entry = request.get_json()
+        if entry:
+            entry = cls.model.create(entry)
+            if entry:
+                resp = make_response(
+                    "Created new {} {}".format(cls.model.entry_type,
+                                               entry['_id']),
+                    201)
+                resp.location = cls.entry_url(entry)
+                return resp
 
-    def _query(self):
-        return mongo.db.entry.find(dict(request.args.items()))
+    @classmethod
+    def query(cls):
+        return mongo.db.entry.find(dict(request.args.items(), **cls.model.query))
+
+    @classmethod
+    def entry_url(cls):
+        """Return the id URL for entry at endpoint."""
+        return id_url(cls.entry_view.endpoint, entry.get('_id'))
 
 
 class ToolboxesView(EntriesView):
-    def _query(self):
-        return mongo.db.entry.find(dict(request.args.items(),
-                                        _cls='Entry.Toolbox'))
+    model = Toolbox
+    entry_view = ToolboxView
 
 
 class TemplatesView(EntriesView):
-    def _query(self):
-        return mongo.db.entry.find(dict(request.args.items(),
-                                        _cls='Entry.Template'))
+    model = Template
+    entry_view = TemplateView
 
 
 class EntryView(MethodView):
     """Handle a single entry."""
-    def get(self, entry_id):
-        entry = self._find_entry(entry_id)
+    @classmethod
+    def get(cls, entry_id):
+        entry = mongo.db.entry.find_one_or_404(entry_id)
+        if not cls.model.is_model_for(entry):
+            abort(404)
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
         if best == "application/json":
-            return jsonify(api_filter(entry))
+            return jsonify(cls.model.for_api(entry))
         elif best == "text/html":
             return render_template('entries/detail.html', entry=entry)
         else:
@@ -103,31 +92,23 @@ class EntryView(MethodView):
             entry.delete()
         return id
 
-    def put(self, entry_id):
-        return NotImplemented
-
-    def _find_entry(self, entry_id):
-        return mongo.db.entry.find_one_or_404(entry_id)
-
 
 class TemplateView(EntryView):
-    def _find_entry(self, entry_id):
-        return mongo.db.entry.find_one_or_404({'_id': entry_id,
-                                               '_cls': 'Entry.Template'})
+    model = Template
+    endpoint = 'entries.template'
 
 
 class ToolboxView(EntryView):
-    def _find_entry(self, entry_id):
-        return mongo.db.entry.find_one_or_404({'_id': entry_id,
-                                               '_cls': 'Entry.Toolbox'})
+    model = Toolbox
+    endpoint = 'entries.toolbox'
 
 
 # Dispatch to json/html views
-entries.add_url_rule('/toolboxes/',
+entries.add_url_rule('/toolboxes',
                      view_func=ToolboxesView.as_view('list_toolboxes'))
 entries.add_url_rule('/toolboxes/<ObjectId:entry_id>',
                      view_func=ToolboxView.as_view('toolbox'))
-entries.add_url_rule('/templates/',
+entries.add_url_rule('/templates',
                      view_func=TemplatesView.as_view('list_templates'))
 entries.add_url_rule('/templates/<ObjectId:entry_id>',
                      view_func=TemplateView.as_view('template'))

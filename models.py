@@ -1,6 +1,7 @@
 import datetime
+import inspect
 from flask import url_for
-from scm import db
+from scm import mongo
 
 # Valid source repositories
 SOURCE_TYPES = (('git', 'GIT repository'),
@@ -8,7 +9,8 @@ SOURCE_TYPES = (('git', 'GIT repository'),
 
 # Types of dependencies we can resolve
 DEPENDENCY_TYPES = (('system', 'System package'),
-                    ('python', 'Python package from pypi'))
+                    ('python', 'Python package from pypi'),
+                    ('toolbox', 'A toolbox from the SCM'))
 
 # Variable types for templates
 VARIABLE_TYPES = (('int', 'Integer'),
@@ -16,70 +18,92 @@ VARIABLE_TYPES = (('int', 'Integer'),
                   ('str', 'String'))
 
 
-class Entry(db.Document):
-    """A generic entry in the catalogue."""
-    name = db.StringField(max_length=255, required=True)
-    description = db.StringField()
-    homepage = db.URLField()
-    license = db.URLField()
-    dependencies = db.ListField(db.EmbeddedDocumentField('Dependency'))
-    created_at = db.DateTimeField(default=datetime.datetime.now, required=True)
-    author = db.StringField(required=True, max_length=255)
+def _filter_fields(spec, entry):
+    """Filter entries in entry according to spec."""
+    def f(k, v):
+        if k in spec:
+            g = spec.get(k)
+            if callable(g):
+                g = g(k, v)
+            if g is None:
+                return None
+            elif isinstance(g, tuple):
+                return g
+            else:
+                return k, g
+        else:
+            return k, v
 
-    def get_absolute_url(self):
-        return url_for('entry')
-
-    def __unicode__(self):
-        return self.name
-
-    meta = {
-        'allow_inheritance': True,
-        'indexes': ['-created_at', 'name'],
-        'ordering': ['-created_at']
-    }
+    return dict(filter(None, [f(k, v) for k, v in entry.items()]))
 
 
-class Source(db.EmbeddedDocument):
-    """Source for an entry."""
-    type = db.StringField(required=True, choices=SOURCE_TYPES)
-    url = db.URLField(required=True)
-    branch = db.StringField(max_length=255, default="master")
+def model_for(entry):
+    """Return the model for entry."""
+    for cls in inspect.getmembers(scm.models, inspect.isclass):
+        if isinstance(cls, Entry) and cls.entry_type == entry.get('_cls'):
+            return cls
 
 
-class Dependency(db.EmbeddedDocument):
-    """Dependency for an entry."""
-    type = db.StringField(required=True, choices=DEPENDENCY_TYPES)
-    name = db.StringField(max_length=255)
-    version = db.StringField(max_length=20)
-    path = db.StringField(max_length=255)
+class Entry(object):
 
+    entry_type = None
 
-class Variable(db.EmbeddedDocument):
-    name = db.StringField(required=True, max_length=255)
-    type = db.StringField(required=True, choices=VARIABLE_TYPES)
-    min = db.FloatField()
-    max = db.FloatField()
-    step = db.FloatField()
-    values = db.ListField()
+    @classmethod
+    def create(cls, entry):
+        """Add a new entry to the catalogue and return it.
+
+        TODO: Validate input data!
+
+        PARAMETERS
+
+        entry -- dict containing the parsed json entry
+
+        """
+        # Make sure we know what we're adding
+        if cls.entry_type is None:
+            raise TypeError("_create_exception must be called for a specific entry type.")
+        # Copy the input
+        entry = dict(entry)
+        # Update metadata
+        entry['metadata'] = {
+            'author': 'S. C. Marketplace',
+            'created_at': datetime.datetime.now(),
+            'version': 1
+        }
+        entry['_cls'] = cls.entry_type
+        entry_id = mongo.db.entry.insert(entry)
+        return mongo.db.entry.find_one(entry_id)
+
+    @classmethod
+    def is_model_for(cls, entry):
+        """Return True if this class is the model for entry."""
+        return cls.entry_type == entry.get('_cls')
+
+    @classmethod
+    def for_api(cls, entry, endpoint):
+        """Filter entry for returning from the api."""
+        api_fields = {
+            '_id': ('@id', entry_url(entry)),
+            '_cls': None,
+            'toolbox': lambda _, v: id_url('', v)
+        }
+        return _filter_fields(api_fields, entry)
 
 
 class Toolbox(Entry):
-    """An entry for a scientific code package.
-
-    Adds a source repository where the code can be retrieved.
-
-    """
-    source = db.EmbeddedDocumentField('Source')
+    entry_type = 'toolbox'
+    query = {'_cls': entry_type}
 
 
 class Template(Entry):
-    """A template entry that runs a specific workflow.
+    entry_type = 'template'
+    query = {'_cls': entry_type}
 
-    Depends on a Toolbox to provide the base application. Also
-    includes the template script, and a description of the variables
-    required to instantiate it correctly.
 
-    """
-    toolbox = db.ReferenceField('Toolbox')
-    template = db.StringField(required=True)
-    variables = db.ListField(db.EmbeddedDocumentField('Variable'))
+# class Variable(db.EmbeddedDocument):
+#     name = db.StringField(required=True, max_length=255)
+#     type = db.StringField(required=True, choices=VARIABLE_TYPES)
+#     min = db.FloatField()
+#     max = db.FloatField()
+#     step = db.FloatField()
+#     values = db.ListField()

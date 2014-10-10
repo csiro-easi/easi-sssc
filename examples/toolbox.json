@@ -7,10 +7,12 @@
     // name        -- (string) short name
     // description -- (string) description of the scientific code
     // homepage    -- (string url) homepage of the code
+    // license     -- (string) url or description of the code license
     //
     "name": "toolbox1",
     "description": "lorem ipsum...",
     "homepage": "http://...",
+    "license": "http://...",
 
     // Source of the scientific code this toolbox implements.
     //
@@ -21,14 +23,12 @@
     // type     -- (string enum) type of repository (git, svn)
     // url      -- (string url) URL to check out from the repository
     // checkout -- (string) checkout target (git branch/tag, svn revision)
-    // license  -- (string) url or description of the code license
     //
     "source": {
         "type": "git"|"svn",
         "url": "http://...",
         "branch": "foo",
-        "tag": "foo",
-        "license": "http://...",
+        "tag": "foo"
     },
 
     // List of dependencies required to run the code.
