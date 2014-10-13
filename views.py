@@ -26,10 +26,11 @@ class EntryView(MethodView):
         entry = mongo.db.entry.find_one_or_404(entry_id)
         if not cls.model.is_model_for(entry):
             abort(404)
+        entry = cls.for_api(entry, cls.endpoint)
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
         if best == "application/json":
-            return jsonify(cls.model.for_api(entry))
+            return jsonify(entry)
         elif best == "text/html":
             return render_template('entries/detail.html', entry=entry)
         else:
@@ -49,7 +50,7 @@ class EntryView(MethodView):
         for k, v in entry.items():
             if k == '_id':
                 filtered.extend([(k, str(v)),
-                                 ('@id', id_url(cls.entry_view.endpoint, v))])
+                                 ('@id', id_url(cls.endpoint, v))])
             elif k in ['_cls']:
                 # Ignore these fields
                 pass

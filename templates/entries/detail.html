@@ -11,9 +11,5 @@
   <p>{{ entry.metadata.created_at.strftime('%H:%M %Y-%m-%d') }}</p>
   <hr>
   <h2>Details</h2>
-  {% if entry.depdencies %}
-    {% for d in entry.dependencies %}
-       <p>{{ d }}</p>
-    {% endfor %}
-  {% endif %}
+  {{ entry|tojson }}
 {% endblock %}
