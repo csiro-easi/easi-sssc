@@ -8,7 +8,7 @@
 
 {% block content %}
   <p>{{ entry.description }}<p>
-  <p>{{ entry.created_at.strftime('%H:%M %Y-%m-%d') }}</p>
+  <p>{{ entry.metadata.created_at.strftime('%H:%M %Y-%m-%d') }}</p>
   <hr>
   <h2>Details</h2>
   {% if entry.depdencies %}

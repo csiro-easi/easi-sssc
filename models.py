@@ -18,25 +18,6 @@ VARIABLE_TYPES = (('int', 'Integer'),
                   ('str', 'String'))
 
 
-def _filter_fields(spec, entry):
-    """Filter entries in entry according to spec."""
-    def f(k, v):
-        if k in spec:
-            g = spec.get(k)
-            if callable(g):
-                g = g(k, v)
-            if g is None:
-                return None
-            elif isinstance(g, tuple):
-                return g
-            else:
-                return k, g
-        else:
-            return k, v
-
-    return dict(filter(None, [f(k, v) for k, v in entry.items()]))
-
-
 def model_for(entry):
     """Return the model for entry."""
     for cls in inspect.getmembers(scm.models, inspect.isclass):
@@ -47,6 +28,7 @@ def model_for(entry):
 class Entry(object):
 
     entry_type = None
+    query = {}
 
     @classmethod
     def create(cls, entry):
@@ -79,25 +61,15 @@ class Entry(object):
         """Return True if this class is the model for entry."""
         return cls.entry_type == entry.get('_cls')
 
-    @classmethod
-    def for_api(cls, entry, endpoint):
-        """Filter entry for returning from the api."""
-        api_fields = {
-            '_id': ('@id', entry_url(entry)),
-            '_cls': None,
-            'toolbox': lambda _, v: id_url('', v)
-        }
-        return _filter_fields(api_fields, entry)
-
 
 class Toolbox(Entry):
     entry_type = 'toolbox'
-    query = {'_cls': entry_type}
+    query = dict(Entry.query, _cls=entry_type)
 
 
 class Template(Entry):
     entry_type = 'template'
-    query = {'_cls': entry_type}
+    query = dict(Entry.query, _cls=entry_type)
 
 
 # class Variable(db.EmbeddedDocument):

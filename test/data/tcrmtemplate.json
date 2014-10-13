@@ -194,12 +194,6 @@ zip_upload_results(\"output/vl/windfield/*.nc\", \"windfields.zip\")
 upload_results(\"output/vl/plots/hazard/*.png\")
 upload_results(\"output/vl/hazard/*.nc\")
 ",
-    "dependencies": [
-        {
-            "type": "toolbox",
-            "uri": "http://localhost:5000/toolboxes/543775560d1fc16462f9360d"
-        }
-    ],
     "variables": [
         {
             "name": "var1",
