@@ -90,10 +90,11 @@ class EntriesView(MethodView):
         if entry:
             entry = cls.model.create(entry)
             if entry:
+                new_id = entry['_id']
                 tbox = request.args.get('tbox')
                 if tbox:
                     mongo.db.entry.update(
-                        { '_id': entry['_id'] },
+                        { '_id': new_id },
                         { '$addToSet': {
                             'dependencies': {
                                 'type': 'toolbox',
@@ -101,8 +102,8 @@ class EntriesView(MethodView):
                             }
                         }}
                     )
-                resp = make_response(str(entry['_id']), 201)
-                resp.location = cls.entry_url(entry)
+                resp = make_response(str(new_id), 201)
+                resp.location = id_url(cls.entry_view.endpoint, new_id)
                 return resp
 
     @classmethod
@@ -158,11 +159,11 @@ def _fix_ids(endpoint, entry):
         return entry
 
 # Dispatch to json/html views
-entries.add_url_rule('/toolboxes/',
+entries.add_url_rule('/toolboxes',
                      view_func=ToolboxesView.as_view('list_toolboxes'))
 entries.add_url_rule('/toolboxes/<ObjectId:entry_id>',
                      view_func=ToolboxView.as_view('toolbox'))
-entries.add_url_rule('/templates/',
+entries.add_url_rule('/templates',
                      view_func=TemplatesView.as_view('list_templates'))
 entries.add_url_rule('/templates/<ObjectId:entry_id>',
                      view_func=TemplateView.as_view('template'))
