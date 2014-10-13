@@ -196,10 +196,81 @@ upload_results(\"output/vl/hazard/*.nc\")
 ",
     "variables": [
         {
-            "name": "var1",
+            "name": "east-bound-lon",
+            "label": "East Bound Longitude",
+            "type": "double",
+            "default": 124.0
+        },
+        {
+            "name": "west-bound-lon",
+            "label": "West Bound Longitude",
+            "type": "double",
+            "default": 113.0
+        },
+        {
+            "name": "north-bound-lat",
+            "label": "North Bound Latitude",
+            "type": "double",
+            "default": -15.0
+        },
+        {
+            "name": "south-bound-lat",
+            "label": "South Bound Latitude",
+            "type": "double",
+            "default": -26.0
+        },
+        {
+            "name": "locality-id",
+            "label": "Locality ID",
             "type": "int",
-            "min": 0,
-            "max": 42
-        }
+            "values": [250913860]
+        },
+        {
+            "name": "locality-name",
+            "label": "Locality Name",
+            "type": "string",
+            "values": ["Port Hedland"]
+        },
+        {
+            "name": "num-simulations",
+            "help": "Number of simulations"
+            "type": "int",
+            "default": 1000
+        },
+        {
+            "name": "years-per-simulation",
+            "help": "Years per simulation"
+            "type": "int",
+            "default": 1
+        },
+        {
+            "name": "season-seed",
+            "help": "Random seed for season"
+            "type": "random-int",
+            "min": 1,
+            "max": 10000000
+        },
+        {
+            "name": "track-seed",
+            "label": "Random seed for track"
+            "type": "random-int",
+            "min": 1,
+            "max": 10000000
+        },
+        {
+            "name": "windfield-interface-resolution",
+            "label": "Windfield Resolution",
+            "type": "double",
+            "default": 0.05,
+            "min": 0.02,
+            "max": 0.5,
+            "step": 0.01
+        },
+        {
+            "name": "n-threads",
+            "label": "Max threads"
+            "type": "int",
+            "min": 1
+        },
     ]
 }
