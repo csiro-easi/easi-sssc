@@ -45,12 +45,21 @@ class EntryView(MethodView):
     @classmethod
     def for_api(cls, entry, endpoint):
         """Filter entry for returning from the api."""
-        api_fields = {
-            '_id': ('@id', id_url(cls.endpoint, entry['_id'])),
-            '_cls': None,
-            'toolbox': lambda _, v: id_url('entries.toolbox', v)
-        }
-        return _filter_fields(api_fields, entry)
+        filtered = []
+        for k, v in entry.items():
+            if k == '_id':
+                filtered.extend([(k, str(v)),
+                                 ('@id', id_url(cls.entry_view.endpoint, v))])
+            elif k in ['_cls']:
+                # Ignore these fields
+                pass
+            elif k == 'dependencies':
+                filtered.append((k, [_fix_ids('entries.toolbox', d)
+                                     for d in v]))
+            else:
+                # Pass everything else as is
+                filtered.append((k, v))
+        return dict(filtered)
 
 
 class TemplateView(EntryView):
@@ -71,13 +80,11 @@ class EntriesView(MethodView):
     """Handle all entries."""
     @classmethod
     def get(cls, format=None):
-        entries = cls.query()
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
+        entries = [cls.for_api(e, cls.entry_view.endpoint) for e in cls.query()]
         if best == "application/json":
-            return jsonify(dict([(str(e.get('_id')),
-                                  cls.for_api(e, cls.entry_view.endpoint))
-                                 for e in entries]))
+            return jsonify(dict([(e.get('_id'), e) for e in entries]))
         elif best == "text/html":
             return render_template('entries/list.html', entries=entries)
         else:
@@ -114,14 +121,21 @@ class EntriesView(MethodView):
     @classmethod
     def for_api(cls, entry, endpoint):
         """Filter entry for returning from the api."""
-        api_fields = {
-            '_id': ('@id', id_url(cls.entry_view.endpoint, entry['_id'])),
-            '_cls': None,
-            'dependencies': lambda _, v: [_fix_ids('entries.toolbox', d)
-                                          for d in v]
-        }
-        return _filter_fields(api_fields, entry)
-
+        filtered = []
+        for k, v in entry.items():
+            if k == '_id':
+                filtered.extend([(k, str(v)),
+                                 ('@id', id_url(cls.entry_view.endpoint, v))])
+            elif k in ['_cls']:
+                # Ignore these fields
+                pass
+            elif k == 'dependencies':
+                filtered.append((k, [_fix_ids('entries.toolbox', d)
+                                     for d in v]))
+            else:
+                # Pass everything else as is
+                filtered.append((k, v))
+        return dict(filtered)
 
 class ToolboxesView(EntriesView):
     model = Toolbox
@@ -131,25 +145,6 @@ class ToolboxesView(EntriesView):
 class TemplatesView(EntriesView):
     model = Template
     entry_view = TemplateView
-
-
-def _filter_fields(spec, entry):
-    """Filter entries in entry according to spec."""
-    def f(k, v):
-        if k in spec:
-            g = spec.get(k)
-            if callable(g):
-                g = g(k, v)
-            if g is None:
-                return None
-            elif isinstance(g, tuple):
-                return g
-            else:
-                return k, g
-        else:
-            return k, v
-
-    return dict(filter(None, [f(k, v) for k, v in entry.items()]))
 
 
 def _fix_ids(endpoint, entry):

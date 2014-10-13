@@ -2,7 +2,7 @@
 
 {% block content %}
     {% for entry in entries %}
-      <h2><a href="{{ entry._id }}">{{ entry.name }}</a></h2>
+      <h2><a href="{{ entry['@id'] }}">{{ entry.name }}</a></h2>
       <p>{{ entry.description|truncate(100) }}</p>
       <p>
         {{ entry.metadata.created_at.strftime('%H:%M %Y-%m-%d') }}
