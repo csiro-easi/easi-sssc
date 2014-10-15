@@ -56,7 +56,6 @@ class APIView(MethodView):
         attributes (like '_cls'). Fix ids for external use.
 
         """
-        print("APIView.for_api()")
         # Copy the entry
         entry = dict(entry)
 
@@ -161,13 +160,11 @@ class EntriesView(APIView):
 
     def for_api(self, entry):
         """Only keep generic fields (metadata etc) for a list of entries."""
-        print("EntriesView.for_api()")
         # Keep generic fields
         e = dict([(k, v)
                   for k, v in entry.items()
                   if k in ['_id', 'name', 'description',
                            'homepage', 'license', 'metadata']])
-        print("keys={}".format(e.keys()))
         # Default processing
         return super().for_api(e)
 
@@ -181,10 +178,21 @@ class TemplatesView(EntriesView):
     model = Template
     entry_view = TemplateView
 
+    def _find_toolbox(self, tbox_id):
+        """Return the short description of a toolbox."""
+        toolbox = mongo.db.entry.find_one(
+            tbox_id,
+            fields=['name', 'description', 'homepage']
+        )
+        toolbox['@id'] = toolbox['_id']
+        del toolbox['_id']
+        toolbox['type'] = 'toolbox'
+        return toolbox
+
     def for_api(self, entry):
         """Keep toolbox dependencies as well as generic fields."""
-        print("TemplatesView.for_api()")
-        toolboxes = self.fix_ids([d for d in entry['dependencies']
+        toolboxes = self.fix_ids([self._find_toolbox(d['uri'])
+                                  for d in entry['dependencies']
                                   if d['type'] == 'toolbox'])
         entry = super().for_api(entry)
         entry['dependencies'] = toolboxes
