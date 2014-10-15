@@ -6,8 +6,8 @@ app = Flask(__name__)
 app.config["MONGO_DBNAME"] = "scm"
 
 # CORS support
+app.config['CORS_HEADERS'] = ['Content-Type', 'X-Requested-With']
 cors = CORS(app)
-app.config['CORS_HEADERS'] = 'Content-Type'
 
 mongo = PyMongo(app)
 
