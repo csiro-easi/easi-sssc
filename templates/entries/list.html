@@ -1,11 +1,27 @@
 {% extends "base.html" %}
 
+{% block page_header %}
+  <div class="page-header">
+    <h1>{{ entry_type }}</h1>
+  </div>
+{% endblock %}
+
+
 {% block content %}
-    {% for entry in entries %}
+    {% for _id, entry in entries.items() %}
       <h2><a href="{{ entry['@id'] }}">{{ entry.name }}</a></h2>
       <p>{{ entry.description|truncate(100) }}</p>
       <p>
         {{ entry.metadata.created_at.strftime('%H:%M %Y-%m-%d') }}
       </p>
     {% endfor %}
+
+      <h2>Source</h2>
+      <script type="syntaxhighlighter" class="brush: js"><![CDATA[
+      {{ entries_js|safe }}
+      ]]></script>
+{% endblock %}
+
+{% block js_footer %}
+  <script type="text/javascript">SyntaxHighlighter.all()</script>
 {% endblock %}

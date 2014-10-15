@@ -1,4 +1,4 @@
-from flask import Blueprint, request, render_template, url_for, jsonify, make_response
+from flask import Blueprint, request, render_template, url_for, jsonify, make_response, abort, json
 from flask.views import MethodView
 from scm import mongo
 from scm.models import Toolbox, Template, Entry
@@ -21,31 +21,11 @@ cls_endpoint = {
 def id_url(object_id):
     """Return an absolute URL for the object with object_id."""
     if isinstance(object_id, ObjectId):
-        o = mongo.db.entry.find(object_id)
+        o = mongo.db.entry.find_one(object_id)
         if o:
             return url_for(cls_endpoint[o['_cls']],
                            _external=True,
                            entry_id=object_id)
-
-
-def keep_keys(keys=[]):
-    """Returns predicate fn to filter entries where key in keys."""
-    if keys is not None:
-        def f(k, v):
-            return k in keys
-        return f
-
-
-def drop_keys(keys=[]):
-    """Return predicate fn that drops entries where key in keys."""
-    if keys is not None:
-        def f(k, v):
-            return k not in keys
-    else:
-        # If keys is None we want to drop everything
-        def f(k, v):
-            return False
-    return f
 
 
 class APIView(MethodView):
@@ -54,29 +34,46 @@ class APIView(MethodView):
     Handles id transformations.
 
     """
-    def for_api(self, entry):
-        """Return an entry dict with fixed ids.
+    def fix_ids(self, entry):
+        """Return a copy of entry with ObjectIds replaced with URLs. """
+        if isinstance(entry, ObjectId):
+            return id_url(entry)
+        elif isinstance(entry, dict):
+            return dict(map(self.fix_ids, entry.items()))
+        elif isinstance(entry, tuple):
+            k, v = entry
+            return (k, self.fix_ids(v))
+        elif isinstance(entry, list):
+            return list(map(self.fix_ids, entry))
+        else:
+            return entry
 
-        Replace ObjectId entries with urls, except '_id' which is
-        replaced with a '@id' url entry.
+    def for_api(self, entry):
+        """Return a copy of entry suitable for returning from the API.
+
+        Add an '@id' entry with the ObjectId, and replace '_id' with a
+        string version of the ObjectId. Remove other internal
+        attributes (like '_cls'). Fix ids for external use.
 
         """
-        if isinstance(entry, dict):
-            items = entry.items()
-        else:
-            items = entry
-        def fix_ids(k, v):
-            if isinstance(v, ObjectId):
-                if k == '_id':
-                    k = '@id'
-                return k, id_url(v)
-            elif isinstance(v, dict):
-                return k, self.for_api(v)
-            return k, v
-        return dict(map(fix_ids, items)
+        print("APIView.for_api()")
+        # Copy the entry
+        entry = dict(entry)
+
+        # Drop internal fields
+        for d in ['_cls']:
+            if d in entry:
+                del entry[d]
+
+        # Update the id field
+        entry['@id'] = entry['_id']
+        entry['_id'] = str(entry['_id'])
+
+        # Replace ObjectIds with URIs
+        return self.fix_ids(entry)
 
 
-class EntryView(MethodView):
+class EntryView(APIView):
 
     list_keys = ['_id', 'name', 'description',
                  'homepage', 'license', 'metadata']
@@ -86,13 +83,15 @@ class EntryView(MethodView):
         entry = mongo.db.entry.find_one_or_404(entry_id)
         if not self.model.is_model_for(entry):
             abort(404)
-        entry = self.for_api(self.detail_view(entry))
+        entry = self.for_api(entry)
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
         if best == "application/json":
             return jsonify(entry)
         elif best == "text/html":
-            return render_template('entries/detail.html', entry=entry)
+            return render_template('entries/detail.html',
+                                   entry=entry,
+                                   entry_json = json.dumps(entry, indent=4))
         else:
             return NotAcceptable
 
@@ -103,50 +102,10 @@ class EntryView(MethodView):
             entry.delete()
         return id
 
-    @classmethod
-    def for_api(cls, entry):
-        """Return entry dict prepared for use in the api.
-
-        Entry should be a list of (key, value) tuples.
-
-        The '_id' entry will be stringified, and an '@id' entry added
-        with the corresponding url. Other ObjectId entries will be
-        transformed into urls.
-
-        """
-        e['@id'] = id_url(entry['_id'])
-        return e
-
-    @classmethod
-    def list_view(cls, entry):
-        """Return a (list of tuples) view of an Entry suitable for a list.
-
-        Default is to only keep the '@id', 'name', 'description', 'homepage',
-        'license' and 'metadata' entries.
-
-        """
-        return filter(keep_keys(list_keys), entry.items())
-
-    @classmethod
-    def detail_view(cls, entry):
-        """Return a detailed view (list of tuples) of the entry.
-
-        Default is to return all entries except '_cls', with fixed
-        ids.
-
-        """
-        return filter(drop_keys(['_cls']), entry.items())
-
 
 class TemplateView(EntryView):
     model = Template
     endpoint = 'entries.template'
-
-    @classmethod
-    def for_api(cls, entry):
-        """Turn any toolbox references into urls."""
-        entry = cls.for_api(entry)
-        return entry
 
 
 class ToolboxView(EntryView):
@@ -154,7 +113,7 @@ class ToolboxView(EntryView):
     endpoint = 'entries.toolbox'
 
 
-class EntriesView(MethodView):
+class EntriesView(APIView):
 
     model = Entry
     entry_view = EntryView
@@ -163,11 +122,14 @@ class EntriesView(MethodView):
     def get(self, format=None):
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
-        entries = [self.for_api(self.list_view(e)) for e in self.query()]
+        entries = dict([(e['_id'], e) for e in map(self.for_api, self.query())])
         if best == "application/json":
-            return jsonify(dict([(e.get('_id'), e) for e in entries]))
+            return jsonify(entries)
         elif best == "text/html":
-            return render_template('entries/list.html', entries=entries)
+            return render_template('entries/list.html',
+                                   entry_type="{}s".format(self.model.__name__),
+                                   entries=entries,
+                                   entries_js=json.dumps(entries, indent=4))
         else:
             return NotAcceptable
 
@@ -197,11 +159,17 @@ class EntriesView(MethodView):
         return mongo.db.entry.find(dict(request.args.items(),
                                         **self.model.query))
 
-    @classmethod
-    def for_api(cls, entry):
-        """Filter entry for returning from the api.
-        """
-        return Entry.for_api(entry)
+    def for_api(self, entry):
+        """Only keep generic fields (metadata etc) for a list of entries."""
+        print("EntriesView.for_api()")
+        # Keep generic fields
+        e = dict([(k, v)
+                  for k, v in entry.items()
+                  if k in ['_id', 'name', 'description',
+                           'homepage', 'license', 'metadata']])
+        print("keys={}".format(e.keys()))
+        # Default processing
+        return super().for_api(e)
 
 
 class ToolboxesView(EntriesView):
@@ -213,12 +181,15 @@ class TemplatesView(EntriesView):
     model = Template
     entry_view = TemplateView
 
-
-def _fix_ids(endpoint, entry):
-    if entry['type'] == 'toolbox':
-        return dict(entry, uri=id_url(entry['uri']))
-    else:
+    def for_api(self, entry):
+        """Keep toolbox dependencies as well as generic fields."""
+        print("TemplatesView.for_api()")
+        toolboxes = self.fix_ids([d for d in entry['dependencies']
+                                  if d['type'] == 'toolbox'])
+        entry = super().for_api(entry)
+        entry['dependencies'] = toolboxes
         return entry
+
 
 # Dispatch to json/html views
 entries.add_url_rule('/toolboxes',
