@@ -1,5 +1,6 @@
 from flask import Flask
 from flask.ext.pymongo import PyMongo
+from flask.ext.cors import CORS
 
 app = Flask(__name__)
 app.config["MONGO_DBNAME"] = "scm"
