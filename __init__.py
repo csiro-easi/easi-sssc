@@ -4,6 +4,10 @@ from flask.ext.pymongo import PyMongo
 app = Flask(__name__)
 app.config["MONGO_DBNAME"] = "scm"
 
+# CORS support
+cors = CORS(app)
+app.config['CORS_HEADERS'] = 'Content-Type'
+
 mongo = PyMongo(app)
 
 # # API via flask-restful
