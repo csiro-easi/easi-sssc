@@ -121,7 +121,9 @@ class EntriesView(APIView):
     def get(self, format=None):
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
-        entries = dict([(e['_id'], e) for e in map(self.for_api, self.query())])
+        entries = dict([(e['_id'], e)
+                        for e in map(self.for_api,
+                                     mongo.db.entry.find(self.model.query))])
         if best == "application/json":
             return jsonify(entries)
         elif best == "text/html":
@@ -153,10 +155,6 @@ class EntriesView(APIView):
                 resp = make_response(str(new_id), 201)
                 resp.location = id_url(new_id)
                 return resp
-
-    def query(self):
-        return mongo.db.entry.find(dict(request.args.items(),
-                                        **self.model.query))
 
     def for_api(self, entry):
         """Only keep generic fields (metadata etc) for a list of entries."""
