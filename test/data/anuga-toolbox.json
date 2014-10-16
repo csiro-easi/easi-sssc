@@ -1,0 +1,18 @@
+{
+    "name": "ANUGA",
+    "description": "ANUGA Hydrodynamic Inundation Modelling",
+    "homepage": "https://anuga.anu.edu.au",
+    "license": "https://anuga.anu.edu.au/svn/anuga/trunk/anuga_core/source/anuga/LICENSE.txt",
+
+    "source": {
+        "type": "svn",
+        "url": "https://anuga.anu.edu.au/svn/anuga/trunk/anuga_core/"
+    },
+
+    "dependencies": [
+        {
+            "type": "python",
+            "path": "requirements.txt"
+        }
+    ]
+}
