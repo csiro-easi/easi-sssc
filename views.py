@@ -197,6 +197,11 @@ class TemplatesView(EntriesView):
         return entry
 
 
+class IndexView(MethodView):
+    def get(self):
+        return render_template('index.html')
+
+
 # Dispatch to json/html views
 entries.add_url_rule('/toolboxes',
                      view_func=ToolboxesView.as_view('list_toolboxes'))
@@ -206,3 +211,4 @@ entries.add_url_rule('/templates',
                      view_func=TemplatesView.as_view('list_templates'))
 entries.add_url_rule('/templates/<ObjectId:entry_id>',
                      view_func=TemplateView.as_view('template'))
+entries.add_url_rule('/', view_func=IndexView.as_view('index'))
