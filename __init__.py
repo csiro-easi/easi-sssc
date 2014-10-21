@@ -11,19 +11,11 @@ cors = CORS(app)
 
 mongo = PyMongo(app)
 
-# # API via flask-restful
-# def register_api(app):
-#     # Prevent circular imports
-#     import scm.api
-
-# register_api(app)
-
-
 # Views via blueprints
 def register_blueprints(app):
     # Prevents circular imports
-    from scm.views import entries
-    app.register_blueprint(entries)
+    from scm.views import site
+    app.register_blueprint(site)
 
 register_blueprints(app)
 

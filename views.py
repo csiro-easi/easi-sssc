@@ -5,16 +5,16 @@ from scm.models import Toolbox, Template, Entry
 from werkzeug.exceptions import NotAcceptable
 from bson import ObjectId
 
-entries = Blueprint('entries', __name__, template_folder='templates')
+site = Blueprint('site', __name__, template_folder='templates')
 
 model_endpoint = {
-    'Toolbox': 'entries.toolbox',
-    'Template': 'entries.template'
+    'Toolbox': 'site.toolbox',
+    'Template': 'site.template'
 }
 
 cls_endpoint = {
-    'toolbox': 'entries.toolbox',
-    'template': 'entries.template'
+    'toolbox': 'site.toolbox',
+    'template': 'site.template'
 }
 
 
@@ -104,12 +104,12 @@ class EntryView(APIView):
 
 class TemplateView(EntryView):
     model = Template
-    endpoint = 'entries.template'
+    endpoint = 'site.template'
 
 
 class ToolboxView(EntryView):
     model = Toolbox
-    endpoint = 'entries.toolbox'
+    endpoint = 'site.toolbox'
 
 
 class EntriesView(APIView):
@@ -197,18 +197,22 @@ class TemplatesView(EntriesView):
         return entry
 
 
-class IndexView(MethodView):
-    def get(self):
-        return render_template('index.html')
-
-
 # Dispatch to json/html views
-entries.add_url_rule('/toolboxes',
+site.add_url_rule('/toolboxes',
                      view_func=ToolboxesView.as_view('list_toolboxes'))
-entries.add_url_rule('/toolboxes/<ObjectId:entry_id>',
+site.add_url_rule('/toolboxes/<ObjectId:entry_id>',
                      view_func=ToolboxView.as_view('toolbox'))
-entries.add_url_rule('/templates',
+site.add_url_rule('/templates',
                      view_func=TemplatesView.as_view('list_templates'))
-entries.add_url_rule('/templates/<ObjectId:entry_id>',
+site.add_url_rule('/templates/<ObjectId:entry_id>',
                      view_func=TemplateView.as_view('template'))
-entries.add_url_rule('/', view_func=IndexView.as_view('index'))
+
+
+@site.route('/new/solution')
+def new_solution():
+    pass
+
+
+@site.route('/')
+def index():
+    return render_template('index.html')

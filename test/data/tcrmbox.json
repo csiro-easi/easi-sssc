@@ -7,10 +7,30 @@
     "source": {
         "type": "git",
         "url": "https://github.com/GeoscienceAustralia/tcrm.git",
-        "checkout": "v1.0rc1"
+        "checkout": "v1.0rc1",
+        "exec": "python installer/setup.py build_ext -i"
     },
 
     "dependencies": [
+        {
+            "type": "system",
+            "name": "tk-devel",
+            "comment": "Required for matplotlib"
+        },
+        {
+            "type": "system",
+            "name": "tkinter",
+            "comment": "Required for matplotlib"
+        },
+        {
+            "type": "system",
+            "name": "geos-devel"
+        },
+        {
+            "type": "system",
+            "name": "hdf5-devel",
+            "comment": "For netCDF4 support"
+        },
         {
             "type": "python",
             "path": "requirements.txt"

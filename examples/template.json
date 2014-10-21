@@ -12,10 +12,6 @@
     "description": "lorem ipsum...",
     "homepage": "http://...",
 
-    // The id of the toolbox required to run this template.
-    //
-    "toolbox": <toolbox id>,
-
     // List of extra dependencies required to run the template. This
     // should only include dependencies that are not already supplied
     // by the toolbox.
