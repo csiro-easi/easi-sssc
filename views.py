@@ -1,7 +1,7 @@
 from flask import Blueprint, request, render_template, url_for, jsonify, make_response, abort, json
 from flask.views import MethodView
 from scm import mongo
-from scm.models import Toolbox, Template, Entry
+from scm.models import Toolbox, Entry, Problem, Solution
 from werkzeug.exceptions import NotAcceptable
 from bson import ObjectId
 
@@ -9,12 +9,14 @@ site = Blueprint('site', __name__, template_folder='templates')
 
 model_endpoint = {
     'Toolbox': 'site.toolbox',
-    'Template': 'site.template'
+    'Solution': 'site.solution',
+    'Problem': 'site.problem'
 }
 
 cls_endpoint = {
     'toolbox': 'site.toolbox',
-    'template': 'site.template'
+    'solution': 'site.solution',
+    'problem': 'site.problem'
 }
 
 
@@ -102,9 +104,14 @@ class EntryView(APIView):
         return id
 
 
-class TemplateView(EntryView):
-    model = Template
-    endpoint = 'site.template'
+class ProblemView(EntryView):
+    model = Problem
+    endpoint = 'site.problem'
+
+
+class SolutionView(EntryView):
+    model = Solution
+    endpoint = 'site.solution'
 
 
 class ToolboxView(EntryView):
@@ -167,14 +174,19 @@ class EntriesView(APIView):
         return super().for_api(e)
 
 
+class ProblemsView(EntriesView):
+    model = Problem
+    entry_view = ProblemView
+
+
 class ToolboxesView(EntriesView):
     model = Toolbox
     entry_view = ToolboxView
 
 
-class TemplatesView(EntriesView):
-    model = Template
-    entry_view = TemplateView
+class SolutionsView(EntriesView):
+    model = Solution
+    entry_view = SolutionView
 
     def _find_toolbox(self, tbox_id):
         """Return the short description of a toolbox."""
@@ -202,10 +214,10 @@ site.add_url_rule('/toolboxes',
                      view_func=ToolboxesView.as_view('list_toolboxes'))
 site.add_url_rule('/toolboxes/<ObjectId:entry_id>',
                      view_func=ToolboxView.as_view('toolbox'))
-site.add_url_rule('/templates',
-                     view_func=TemplatesView.as_view('list_templates'))
-site.add_url_rule('/templates/<ObjectId:entry_id>',
-                     view_func=TemplateView.as_view('template'))
+site.add_url_rule('/solutions',
+                     view_func=SolutionsView.as_view('solutions'))
+site.add_url_rule('/solutions/<ObjectId:entry_id>',
+                     view_func=SolutionView.as_view('solution'))
 
 
 @site.route('/new/solution')

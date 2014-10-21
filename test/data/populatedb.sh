@@ -7,14 +7,14 @@ tboxid=$(curl "$1/toolboxes" -d @tcrmbox.json -X POST -H "Content-Type: applicat
 
 echo "Inserted TCRM toolbox: $tboxid"
 
-templateid=$(curl "$1/templates?tbox=$tboxid" -d @tcrmtemplate.json -X POST -H "Content-Type: application/json")
+solutionid=$(curl "$1/solutions?tbox=$tboxid" -d @tcrmsolution.json -X POST -H "Content-Type: application/json")
 
-echo "Inserted TCRM template: $templateid"
+echo "Inserted TCRM solution: $solutionid"
 
 tboxid=$(curl "$1/toolboxes" -d @anuga-toolbox.json -X POST -H "Content-Type: application/json")
 
 echo "Inserted ANUGA toolbox: $tboxid"
 
-templateid=$(curl "$1/templates?tbox=$tboxid" -d @anuga-template.json -X POST -H "Content-Type: application/json")
+solutionid=$(curl "$1/solutions?tbox=$tboxid" -d @anuga-solution.json -X POST -H "Content-Type: application/json")
 
-echo "Inserted ANUGA template: $templateid"
+echo "Inserted ANUGA solution: $solutionid"

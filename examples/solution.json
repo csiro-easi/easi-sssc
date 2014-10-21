@@ -1,8 +1,8 @@
 {
-    // ID for the template should be a resolvable URL
-    "@id": "http://example.org/templates/abcdefghijklmnop",
+    // ID for the solution should be a resolvable URL
+    "@id": "http://example.org/solutions/abcdefghijklmnop",
 
-    // Basic information about the template
+    // Basic information about the solution
     //
     // name        -- (string) short name
     // description -- (string) description of the scientific code
@@ -12,7 +12,7 @@
     "description": "lorem ipsum...",
     "homepage": "http://...",
 
-    // List of extra dependencies required to run the template. This
+    // List of extra dependencies required to run the solution. This
     // should only include dependencies that are not already supplied
     // by the toolbox.
     //
@@ -61,9 +61,9 @@
 
     // This entry includes metadata about the SCM entry itself.
     //
-    // author       -- (string) who submitted the template
+    // author       -- (string) who submitted the solution
     // version      -- (string) generated version number
-    // create_at    -- (string datetime) date template was submitted to the SCM
+    // create_at    -- (string datetime) date solution was submitted to the SCM
     "metadata": {
         "author": "Joe Bloggs",
         "version": "1.0",

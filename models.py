@@ -12,7 +12,7 @@ DEPENDENCY_TYPES = (('system', 'System package'),
                     ('python', 'Python package from pypi'),
                     ('toolbox', 'A toolbox from the SCM'))
 
-# Variable types for templates
+# Variable types for solutions
 VARIABLE_TYPES = (('int', 'Integer'),
                   ('dbl', 'Floating point'),
                   ('str', 'String'))
@@ -67,8 +67,13 @@ class Toolbox(Entry):
     query = dict(Entry.query, _cls=entry_type)
 
 
-class Template(Entry):
-    entry_type = 'template'
+class Solution(Entry):
+    entry_type = 'solution'
+    query = dict(Entry.query, _cls=entry_type)
+
+
+class Problem(Entry):
+    entry_type = 'problem'
     query = dict(Entry.query, _cls=entry_type)
 
 

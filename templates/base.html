@@ -18,17 +18,37 @@
 
   <body>
 
-    {%- block topbar -%}
-    <div class="topbar">
-      <div class="fill">
-        <div class="container">
-          <h2>
-              <a href="/" class="brand">Source Code Marketplace</a>
-          </h2>
+    <nav class="navbar navbar-default navbar-fixed-top" role="navigation">
+      <div class="container-fluid">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed"
+                  data-toggle="collapse" data-target="#navbar-content-1">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="#">Scientific Code Marketplace</a>
         </div>
+
+        {%- block topbar -%}
+        <div class="collapse navbar-collapse" id="navbar-content-1">
+          <ul class="nav navbar-nav">
+            <li><a href="{{ url_for('site.index') }}">Home</a></li>
+            <li><a href="{{ url_for('site.problems') }}">Problems</a></li>
+            <li><a href="{{ url_for('site.solutions') }}">Solutions</a></li>
+            <li><a href="{{ url_for('site.new_solution') }}">Add Entry</a></li>
+          </ul>
+          <form class="navbar-form navbar-right" role="search">
+            <div class="form-group">
+              <input type="text" class="form-control" placeholder="Search">
+            </div>
+            <button type="submit" class="btn btn-default">Submit</button>
+          </form>
+        </div>
+        {%- endblock -%}
       </div>
-    </div>
-    {%- endblock -%}
+    </nav>
 
     <div class="container">
       <div class="content">
