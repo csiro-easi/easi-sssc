@@ -218,6 +218,8 @@ site.add_url_rule('/solutions',
                      view_func=SolutionsView.as_view('solutions'))
 site.add_url_rule('/solutions/<ObjectId:entry_id>',
                      view_func=SolutionView.as_view('solution'))
+site.add_url_rule('/problems',
+                  view_func=ProblemsView.as_view('problems'))
 
 
 @site.route('/new/solution')
