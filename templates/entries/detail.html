@@ -1,19 +1,14 @@
 {% extends "base.html" %}
 
 {% block page_header %}
-  <div class="page-header">
-    <h1>{{ entry.name }}</h1>
-  </div>
+<div class="page-header">
+  <h1>{{ entry_type }}</h1>
+</div>
 {% endblock %}
 
 {% block content %}
-  <p>{{ entry.description }}<p>
-  <p>{{ entry.metadata.created_at.strftime('%H:%M %Y-%m-%d') }}</p>
-  <hr>
-  <h2>Source</h2>
-  <script type="syntaxhighlighter" class="brush: js"><![CDATA[
-  {{ entry_json|safe }}
-  ]]></script>
+{% include 'entries/entry.html' %}
+
 {% endblock %}
 
 {% block js_footer %}

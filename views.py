@@ -78,6 +78,7 @@ class EntryView(APIView):
 
     list_keys = ['_id', 'name', 'description',
                  'homepage', 'license', 'metadata']
+    detail_template = 'entries/detail.html'
 
     """Handle a single entry."""
     def get(self, entry_id):
@@ -90,9 +91,8 @@ class EntryView(APIView):
         if best == "application/json":
             return jsonify(entry)
         elif best == "text/html":
-            return render_template('entries/detail.html',
-                                   entry=entry,
-                                   entry_json = json.dumps(entry, indent=4))
+            return render_template(self.detail_template,
+                                   **self.detail_template_args(entry))
         else:
             return NotAcceptable
 
@@ -103,6 +103,11 @@ class EntryView(APIView):
             entry.delete()
         return id
 
+    def detail_template_args(self, entry):
+        return dict(entry=entry,
+                    entry_type=self.model.__name__,
+                    entry_json=json.dumps(entry, indent=4))
+
 
 class ProblemView(EntryView):
     model = Problem
@@ -112,11 +117,27 @@ class ProblemView(EntryView):
 class SolutionView(EntryView):
     model = Solution
     endpoint = 'site.solution'
+    detail_template = 'entries/solution_detail.html'
 
 
 class ToolboxView(EntryView):
     model = Toolbox
     endpoint = 'site.toolbox'
+    detail_template = 'entries/toolbox_detail.html'
+
+    def detail_template_args(self, entry):
+        dependents = map(
+            self.for_api,
+            mongo.db.entry.find({
+                '_cls': 'solution',
+                'dependencies': {
+                    'type': 'toolbox',
+                    'uri': ObjectId(entry['_id'])
+                }
+            })
+        )
+        return dict(super().detail_template_args(entry),
+                    dependents=dependents)
 
 
 class EntriesView(APIView):
@@ -128,16 +149,15 @@ class EntriesView(APIView):
     def get(self, format=None):
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
-        entries = dict([(e['_id'], e)
-                        for e in map(self.for_api,
-                                     mongo.db.entry.find(self.model.query))])
+        entries = map(self.for_api, mongo.db.entry.find(self.model.query))
         if best == "application/json":
-            return jsonify(entries)
+            return jsonify(dict([(e['_id'], e) for e in entries]))
         elif best == "text/html":
-            return render_template('entries/list.html',
-                                   entry_type="{}s".format(self.model.__name__),
-                                   entries=entries,
-                                   entries_js=json.dumps(entries, indent=4))
+            return render_template(
+                'entries/list.html',
+                entry_type=self.pluralise(),
+                entries=[(e, json.dumps(e, indent=4)) for e in entries]
+            )
         else:
             return NotAcceptable
 
@@ -172,6 +192,13 @@ class EntriesView(APIView):
                            'homepage', 'license', 'metadata']])
         # Default processing
         return super().for_api(e)
+
+    def pluralise(self):
+        """Return the pluralised form of the model name."""
+        name = self.model.__name__
+        ES_ENDS = ['j', 's', 'x']
+        suffix = "es" if name[-1] in ES_ENDS else "s"
+        return "{}{}".format(name, suffix)
 
 
 class ProblemsView(EntriesView):
@@ -211,7 +238,7 @@ class SolutionsView(EntriesView):
 
 # Dispatch to json/html views
 site.add_url_rule('/toolboxes',
-                     view_func=ToolboxesView.as_view('list_toolboxes'))
+                     view_func=ToolboxesView.as_view('toolboxes'))
 site.add_url_rule('/toolboxes/<ObjectId:entry_id>',
                      view_func=ToolboxView.as_view('toolbox'))
 site.add_url_rule('/solutions',
@@ -222,7 +249,7 @@ site.add_url_rule('/problems',
                   view_func=ProblemsView.as_view('problems'))
 
 
-@site.route('/new/solution')
+@site.route('/new')
 def new_solution():
     pass
 

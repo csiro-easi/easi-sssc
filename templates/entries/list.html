@@ -8,18 +8,9 @@
 
 
 {% block content %}
-    {% for _id, entry in entries.items() %}
-      <h2><a href="{{ entry['@id'] }}">{{ entry.name }}</a></h2>
-      <p>{{ entry.description|truncate(100) }}</p>
-      <p>
-        {{ entry.metadata.created_at.strftime('%H:%M %Y-%m-%d') }}
-      </p>
-    {% endfor %}
-
-      <h2>Source</h2>
-      <script type="syntaxhighlighter" class="brush: js"><![CDATA[
-      {{ entries_js|safe }}
-      ]]></script>
+  {% for entry, entry_json in entries %}
+  {% include 'entries/entry.html' %}
+  {% endfor %}
 {% endblock %}
 
 {% block js_footer %}

@@ -1,0 +1,56 @@
+<div class="panel panel-default">
+  <div class="panel-heading">
+    <h2 class="panel-title">{{ entry.name }}</h2>
+  </div>
+  <div class="panel-body">
+    <div class="row">
+      <div class="col-md-6">
+        <dl>
+          <dt>SCM Entry</dt>
+          <dd><a href="{{ entry['@id'] }}">{{ entry['@id'] }}</a></dd>
+
+          {% if entry.dependencies %}
+          <dt>Dependencies</dt>
+          <dd>
+            <ul>
+              {% for d in entry.dependencies %}
+              {% if d.type == 'toolbox' %}
+              {% set href = d['@id'] or d.uri %}
+              <li class="dep-toolbox"><a href="{{ href }}" title="{{ d.description }}">{{ d.name or 'Toolbox' }}</a></li>
+              {% elif d.type == 'python' %}
+              <li class="dep-python">{{ d.name or d.path }}{% if d.version %} ({{ d.version }}){% endif %}</li>
+              {% else %}
+              <li class="dep-system">{{ d.name }}{% if d.version %} ({{ d.version }}){% endif %}</li>
+              {% endif %}
+              {% endfor %}
+            </ul>
+          </dd>
+          {% endif %}
+        </dl>
+
+        {% include 'entries/metadata.html' %}
+      </div>
+      <div class="col-md-6">
+        <dl>
+          <dt>Homepage</dt>
+          <dd><a href="{{ entry.homepage }}">{{ entry.homepage }}</a></dd>
+
+          <dt>Description</dt>
+          <dd>{{ entry.description }}</dd>
+
+          {% if entry.license %}
+          <dt>License</dt>
+          <dd><a href="{{ entry.license }}">{{ entry.license }}</a></dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <p>
+      <button type="button" class="btn btn-info" data-toggle="collapse" data-target="#source_{{entry._id}}">JSON</button>
+    </p>
+    <div id="source_{{entry._id}}" class="collapse">
+      <script type="syntaxhighlighter" class="brush: js"><![CDATA[{{ entry_json|safe }}]]></script>
+    </div>
+  </div>
+</div>
