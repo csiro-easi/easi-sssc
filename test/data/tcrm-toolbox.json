@@ -1,6 +1,6 @@
 {
-    "name": "TCRM",
-    "description": "Tropical Cyclone Risk Model",
+    "name": "Tropical Cyclone Risk Model",
+    "description": "The Tropical Cyclone Risk Model is a stochastic tropical cyclone model developed by [Geoscience Australia](http://www.ga.gov.au) for estimating the wind hazard from tropical cyclones.",
     "homepage": "https://github.com/GeoscienceAustralia/tcrm",
     "license": "https://github.com/GeoscienceAustralia/tcrm/blob/master/LICENSE",
 

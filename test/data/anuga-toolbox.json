@@ -1,6 +1,6 @@
 {
     "name": "ANUGA",
-    "description": "ANUGA Hydrodynamic Inundation Modelling",
+    "description": "ANUGA is a tool which can simulate events and their effects as they ‘progress’ or travel through a scenario in a model. You can model the ‘wave’ or storm surge to measure the impact and risk for known locations.",
     "homepage": "https://anuga.anu.edu.au",
     "license": "https://anuga.anu.edu.au/svn/anuga/trunk/anuga_core/source/anuga/LICENSE.txt",
 
