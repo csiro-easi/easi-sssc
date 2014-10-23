@@ -4,6 +4,7 @@ Flask-PyMongo==0.3.0
 Flask-Script==2.0.5
 Flask-WTF==0.10.2
 Jinja2==2.7.3
+Markdown==2.5.1
 MarkupSafe==0.23
 WTForms==2.0.1
 Werkzeug==0.9.6
@@ -15,6 +16,7 @@ itsdangerous==0.24
 jedi==0.8.1-final0
 mccabe==0.2.1
 nose2==0.5.0
+peewee==2.4.0
 pep8==1.5.7
 pyflakes==0.8.1
 pymongo==2.7.2
