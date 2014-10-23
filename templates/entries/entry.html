@@ -1,6 +1,6 @@
 <div class="panel panel-default">
   <div class="panel-heading">
-    <h2 class="panel-title">{{ entry.name }}</h2>
+    <h2 class="panel-title">Catalogue Entry</h2>
   </div>
   <div class="panel-body">
     <div class="row">
@@ -36,7 +36,7 @@
           <dd><a href="{{ entry.homepage }}">{{ entry.homepage }}</a></dd>
 
           <dt>Description</dt>
-          <dd>{{ entry.description }}</dd>
+          <dd>{{ entry.description|safe }}</dd>
 
           {% if entry.license %}
           <dt>License</dt>

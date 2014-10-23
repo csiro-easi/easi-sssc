@@ -1,5 +1,6 @@
 from flask import Blueprint, request, render_template, url_for, jsonify, make_response, abort, json
 from flask.views import MethodView
+from markdown import markdown
 from scm import mongo
 from scm.models import Toolbox, Entry, Problem, Solution
 from werkzeug.exceptions import NotAcceptable
@@ -70,6 +71,9 @@ class APIView(MethodView):
         entry['@id'] = entry['_id']
         entry['_id'] = str(entry['_id'])
 
+        # Render markdown in descriptions
+        entry['description'] = markdown(entry['description'])
+
         # Replace ObjectIds with URIs
         return self.fix_ids(entry)
 
@@ -112,6 +116,18 @@ class EntryView(APIView):
 class ProblemView(EntryView):
     model = Problem
     endpoint = 'site.problem'
+    detail_template = 'entries/problem_detail.html'
+
+    def detail_template_args(self, entry):
+        solutions = map(
+            self.for_api,
+            mongo.db.entry.find({
+                '_cls': 'solution',
+                'problem': ObjectId(entry['_id'])
+            })
+        )
+        return dict(super().detail_template_args(entry),
+                    solutions=solutions)
 
 
 class SolutionView(EntryView):
@@ -177,6 +193,14 @@ class EntriesView(APIView):
                                 'type': 'toolbox',
                                 'uri': ObjectId(tbox)
                             }
+                        }}
+                    )
+                problem = request.args.get('problem')
+                if problem:
+                    mongo.db.entry.update(
+                        { '_id': new_id },
+                        { '$set': {
+                            'problem': ObjectId(problem)
                         }}
                     )
                 resp = make_response(str(new_id), 201)
@@ -247,6 +271,8 @@ site.add_url_rule('/solutions/<ObjectId:entry_id>',
                      view_func=SolutionView.as_view('solution'))
 site.add_url_rule('/problems',
                   view_func=ProblemsView.as_view('problems'))
+site.add_url_rule('/problems/<ObjectId:entry_id>',
+                  view_func=ProblemView.as_view('problem'))
 
 
 @site.route('/new')
