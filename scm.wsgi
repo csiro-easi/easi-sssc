@@ -1,7 +1,7 @@
-activate_this = '/path/to/env/bin/activate_this.py'
-execfile(activate_this, dict(__file__=activate_this))
+import site
+site.addsitedir('/var/venvs/scm/lib/python3.4/site-packages')
 
 import sys
-sys.path.insert(0, '/path/to/scm')
+sys.path.insert(0, '/var/www')
 
 from scm import app as application
