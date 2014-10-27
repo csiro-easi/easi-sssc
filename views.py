@@ -31,54 +31,49 @@ def id_url(object_id):
                            entry_id=object_id)
 
 
-class APIView(MethodView):
-    """Common base class for all API views.
+def fix_ids(entry):
+    """Return a copy of entry with ObjectIds replaced with URLs. """
+    if isinstance(entry, ObjectId):
+        return id_url(entry)
+    elif isinstance(entry, dict):
+        return dict(map(fix_ids, entry.items()))
+    elif isinstance(entry, tuple):
+        k, v = entry
+        return (k, fix_ids(v))
+    elif isinstance(entry, list):
+        return list(map(fix_ids, entry))
+    else:
+        return entry
 
-    Handles id transformations.
+
+def for_api(entry):
+    """Return a copy of entry suitable for returning from the API.
+
+    Add an '@id' entry with the ObjectId, and replace '_id' with a
+    string version of the ObjectId. Remove other internal
+    attributes (like '_cls'). Fix ids for external use.
 
     """
-    def fix_ids(self, entry):
-        """Return a copy of entry with ObjectIds replaced with URLs. """
-        if isinstance(entry, ObjectId):
-            return id_url(entry)
-        elif isinstance(entry, dict):
-            return dict(map(self.fix_ids, entry.items()))
-        elif isinstance(entry, tuple):
-            k, v = entry
-            return (k, self.fix_ids(v))
-        elif isinstance(entry, list):
-            return list(map(self.fix_ids, entry))
-        else:
-            return entry
+    # Copy the entry
+    entry = dict(entry)
 
-    def for_api(self, entry):
-        """Return a copy of entry suitable for returning from the API.
+    # Rename the _cls field
+    if '_cls' in entry:
+        entry['type'] = entry['_cls']
+        del entry['_cls']
 
-        Add an '@id' entry with the ObjectId, and replace '_id' with a
-        string version of the ObjectId. Remove other internal
-        attributes (like '_cls'). Fix ids for external use.
+    # Update the id field
+    entry['@id'] = entry['_id']
+    entry['_id'] = str(entry['_id'])
 
-        """
-        # Copy the entry
-        entry = dict(entry)
+    # Render markdown in descriptions
+    entry['description'] = markdown(entry['description'])
 
-        # Drop internal fields
-        for d in ['_cls']:
-            if d in entry:
-                del entry[d]
-
-        # Update the id field
-        entry['@id'] = entry['_id']
-        entry['_id'] = str(entry['_id'])
-
-        # Render markdown in descriptions
-        entry['description'] = markdown(entry['description'])
-
-        # Replace ObjectIds with URIs
-        return self.fix_ids(entry)
+    # Replace ObjectIds with URIs
+    return fix_ids(entry)
 
 
-class EntryView(APIView):
+class EntryView(MethodView):
 
     list_keys = ['_id', 'name', 'description',
                  'homepage', 'license', 'metadata']
@@ -89,7 +84,7 @@ class EntryView(APIView):
         entry = mongo.db.entry.find_one_or_404(entry_id)
         if not self.model.is_model_for(entry):
             abort(404)
-        entry = self.for_api(entry)
+        entry = for_api(entry)
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
         if best == "application/json":
@@ -120,7 +115,7 @@ class ProblemView(EntryView):
 
     def detail_template_args(self, entry):
         solutions = map(
-            self.for_api,
+            for_api,
             mongo.db.entry.find({
                 '_cls': 'solution',
                 'problem': ObjectId(entry['_id'])
@@ -143,7 +138,7 @@ class ToolboxView(EntryView):
 
     def detail_template_args(self, entry):
         dependents = map(
-            self.for_api,
+            for_api,
             mongo.db.entry.find({
                 '_cls': 'solution',
                 'dependencies': {
@@ -156,7 +151,7 @@ class ToolboxView(EntryView):
                     dependents=dependents)
 
 
-class EntriesView(APIView):
+class EntriesView(MethodView):
 
     model = Entry
     entry_view = EntryView
@@ -165,7 +160,7 @@ class EntriesView(APIView):
     def get(self, format=None):
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
-        entries = map(self.for_api, mongo.db.entry.find(self.model.query))
+        entries = map(for_api, mongo.db.entry.find(self.model.query))
         if best == "application/json":
             return jsonify(dict([(e['_id'], e) for e in entries]))
         elif best == "text/html":
@@ -275,9 +270,33 @@ site.add_url_rule('/problems/<ObjectId:entry_id>',
                   view_func=ProblemView.as_view('problem'))
 
 
-@site.route('/new')
+@site.route('/add/problem')
+def new_problem():
+    pass
+
+
+@site.route('/add/solution')
 def new_solution():
     pass
+
+
+@site.route('/add/toolbox')
+def new_toolbox():
+    pass
+
+
+@site.route('/search')
+def search():
+    results = []
+    if request.method == 'POST':
+        search = request.form.get("search")
+    else:
+        search = request.args.get("search")
+    if search:
+        results = mongo.db.entry.find({"$text": {"$search": search}})
+    return render_template('search_results.html',
+                           search=search,
+                           results=list(map(for_api, results)))
 
 
 @site.route('/')
