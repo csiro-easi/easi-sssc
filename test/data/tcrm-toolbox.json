@@ -2,8 +2,9 @@
     "name": "Tropical Cyclone Risk Model",
     "description": "The Tropical Cyclone Risk Model is a stochastic tropical cyclone model developed by [Geoscience Australia](http://www.ga.gov.au) for estimating the wind hazard from tropical cyclones.",
     "homepage": "https://github.com/GeoscienceAustralia/tcrm",
-    "license": "https://github.com/GeoscienceAustralia/tcrm/blob/master/LICENSE",
-
+    "license": {
+        "url": "https://github.com/GeoscienceAustralia/tcrm/blob/master/LICENSE"
+    },
     "source": {
         "type": "git",
         "url": "https://github.com/GeoscienceAustralia/tcrm.git",
@@ -14,13 +15,11 @@
     "dependencies": [
         {
             "type": "system",
-            "name": "tk-devel",
-            "comment": "Required for matplotlib"
+            "name": "tk-devel"
         },
         {
             "type": "system",
-            "name": "tkinter",
-            "comment": "Required for matplotlib"
+            "name": "tkinter"
         },
         {
             "type": "system",
@@ -28,8 +27,7 @@
         },
         {
             "type": "system",
-            "name": "hdf5-devel",
-            "comment": "For netCDF4 support"
+            "name": "hdf5-devel"
         },
         {
             "type": "python",

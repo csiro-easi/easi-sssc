@@ -1,7 +1,5 @@
 import datetime
-import inspect
-from flask import url_for
-from scm import mongo
+from mongoengine import *
 
 # Valid source repositories
 SOURCE_TYPES = (('git', 'GIT repository'),
@@ -9,78 +7,148 @@ SOURCE_TYPES = (('git', 'GIT repository'),
 
 # Types of dependencies we can resolve
 DEPENDENCY_TYPES = (('system', 'System package'),
-                    ('python', 'Python package from pypi'),
-                    ('toolbox', 'A toolbox from the SCM'))
+                    ('python', 'Python package from pypi'))
 
 # Variable types for solutions
 VARIABLE_TYPES = (('int', 'Integer'),
-                  ('dbl', 'Floating point'),
-                  ('str', 'String'))
+                  ('double', 'Floating point'),
+                  ('string', 'String'),
+                  ('random-int', 'Random Integer'))
 
 
-def model_for(entry):
-    """Return the model for entry."""
-    for cls in inspect.getmembers(scm.models, inspect.isclass):
-        if isinstance(cls, Entry) and cls.entry_type == entry.get('_cls'):
-            return cls
+def text_search(text):
+    """Search for entries that match text.
+
+    Performs a basic text search for text. Equivalent to calling:
+
+    pymongo_find({"$text": {"$search": text}})
+
+    Drops to PyMongo for text search support while MongoEngine doesn't
+    support it. Wraps the dict results from pymongo in model
+    instances.
+
+    """
+    return pymongo_find({"$text": {"$search": text}})
 
 
-class Entry(object):
+def pymongo_find(query):
+    """Performs a find(query) using the PyMongo connection directly.
 
-    entry_type = None
-    query = {}
+    Wraps the dict results in model instances before returning them.
 
-    @classmethod
-    def create(cls, entry):
-        """Add a new entry to the catalogue and return it.
-
-        TODO: Validate input data!
-
-        PARAMETERS
-
-        entry -- dict containing the parsed json entry
-
-        """
-        # Make sure we know what we're adding
-        if cls.entry_type is None:
-            raise TypeError("_create_exception must be called for a specific entry type.")
-        # Copy the input
-        entry = dict(entry)
-        # Update metadata
-        entry['metadata'] = {
-            'author': 'S. C. Marketplace',
-            'created_at': datetime.datetime.now(),
-            'version': 1
-        }
-        entry['_cls'] = cls.entry_type
-        entry_id = mongo.db.entry.insert(entry)
-        return mongo.db.entry.find_one(entry_id)
-
-    @classmethod
-    def is_model_for(cls, entry):
-        """Return True if this class is the model for entry."""
-        return cls.entry_type == entry.get('_cls')
+    """
+    results = Entry._get_collection().find(query, fields="_id")
+    if results:
+        return Entry.objects(id__in=[result['_id'] for result in results])
 
 
-class Toolbox(Entry):
-    entry_type = 'toolbox'
-    query = dict(Entry.query, _cls=entry_type)
+class User(Document):
+    """Catalogue user."""
+    email = EmailField(primary_key=True)
+    name = StringField()
 
 
-class Solution(Entry):
-    entry_type = 'solution'
-    query = dict(Entry.query, _cls=entry_type)
+class Metadata(EmbeddedDocument):
+    """Metadata for all catalogue entries."""
+    created_at = DateTimeField(default=datetime.datetime.now)
+    author = ReferenceField(User)  # , required=True)
+    version = IntField(default=1)
+
+
+class Entry(Document):
+    """Base information shared by all entries.
+
+    name -- Short name
+    description -- Longer description
+    metadata -- Catalogue metadata
+
+    """
+    name = StringField(required=True)
+    description = StringField()
+    metadata = EmbeddedDocumentField(Metadata, required=True)
+
+    meta = {
+        # MongoEngine on pip doesn't support text indexes yet
+        # 'indexes': [('$name', '$description')],
+        'allow_inheritance': True
+    }
+
+    def type(self):
+        return self._cls.split('.')[-1]
+
+
+class License(EmbeddedDocument):
+    name = StringField()
+    url = URLField()
+
+
+class Source(EmbeddedDocument):
+    """Source for a scientific code.
+
+    type -- Repository type (git, svn)
+    url -- Repository url
+    checkout -- Branch/tag to checkout (default 'master' for git)
+    exec -- Optional setup script
+
+    """
+    type = StringField(choices=SOURCE_TYPES, required=True)
+    url = URLField(required=True)
+    checkout = StringField()
+    exec = StringField()
+
+
+class Dependency(EmbeddedDocument):
+    """Dependency on an external package."""
+    type = StringField(choices=DEPENDENCY_TYPES, required=True)
+    name = StringField()
+    version = StringField()
+    path = StringField()
+
+
+class Var(EmbeddedDocument):
+    """Variable in a Solution template.
+
+    name -- Placeholder name in the template
+    label -- User friendly label
+    description -- Additional help text
+    type -- Variable type (int, double, string, random-int)
+    values -- List of valid values
+    min -- Minimum value
+    max -- Maximum value
+    step -- Increment between min and max
+
+    """
+    name = StringField(required=True)
+    type = StringField(choices=VARIABLE_TYPES)
+    label = StringField(max_length=50)
+    description = StringField()
+    optional = BooleanField(default=False)
+    default = DynamicField()
+    min = FloatField()
+    max = FloatField()
+    step = FloatField()
+    values = ListField()
 
 
 class Problem(Entry):
-    entry_type = 'problem'
-    query = dict(Entry.query, _cls=entry_type)
+    """A problem to be solved.
+
+    Requires nothing extra over Entry.
+
+    """
+    pass
 
 
-# class Variable(db.EmbeddedDocument):
-#     name = db.StringField(required=True, max_length=255)
-#     type = db.StringField(required=True, choices=VARIABLE_TYPES)
-#     min = db.FloatField()
-#     max = db.FloatField()
-#     step = db.FloatField()
-#     values = db.ListField()
+class Toolbox(Entry):
+    homepage = URLField()
+    license = EmbeddedDocumentField(License)
+    source = EmbeddedDocumentField(Source, required=True)
+    dependencies = ListField(EmbeddedDocumentField(Dependency))
+
+
+class Solution(Entry):
+    problem = ReferenceField(Problem, required=True)
+    toolbox = ReferenceField(Toolbox)
+    template = StringField(required=True)
+    variables = ListField(EmbeddedDocumentField(Var), required=True)
+    depedencies = ListField(EmbeddedDocumentField(Dependency))
