@@ -1,12 +1,32 @@
 {% extends 'entries/detail.html' %}
 
-{% block content %}
-{{ super() }}
+{% block details %}
 
-<div class="panel panel-default">
-  <div class="panel-heading"><h2 class="panel-title">Problem Solved</h2></div>
-  <div class="panel-body">
-    <a href="{{ entry.problem }}">{{ entry.problem }}</a>
+<div class="row">
+  <div class="col-md-6">
+    <div class="panel panel-default">
+      <div class="panel-heading"><h2 class="panel-title">Problem</h2></div>
+      <div class="panel-body">
+        {# <a href="{{ entry_url(entry.problem) }}">{{ entry_url(entry.problem) }}</a> #}
+        {% with %}
+        {% set entry = entry.problem %}
+        {% include 'entries/brief.html' %}
+        {% endwith %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="panel panel-default">
+      <div class="panel-heading"><h2 class="panel-title">Toolbox</h2></div>
+      <div class="panel-body">
+        {# <a href="{{ entry_url(entry.toolbox) }}">{{ entry_url(entry.toolbox) }}</a> #}
+        {% with %}
+        {% set entry = entry.toolbox %}
+        {% include 'entries/brief.html' %}
+        {% endwith %}
+      </div>
+    </div>
   </div>
 </div>
 
@@ -40,5 +60,8 @@
     <script type="syntaxhighlighter" class="brush: python"><![CDATA[{{ entry.template|safe }}]]></script>
   </div>
 </div>
+
+{# Include dependencies last #}
+{{ super() }}
 
 {% endblock %}

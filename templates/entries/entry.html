@@ -1,56 +1,31 @@
+{% set url = entry_url(entry) %}
+
 <div class="panel panel-default">
   <div class="panel-heading">
-    <h2 class="panel-title">Catalogue Entry</h2>
+    <h2 class="panel-title"><a href="{{ url }}">{{ entry.name }}</a></h2>
   </div>
   <div class="panel-body">
     <div class="row">
       <div class="col-md-6">
         <dl>
-          <dt>SCM Entry</dt>
-          <dd><a href="{{ entry['@id'] }}">{{ entry['@id'] }}</a></dd>
+          <dt>Description</dt>
+          <dd>{{ entry.description|markdown|safe }}</dd>
 
-          {% if entry.dependencies %}
-          <dt>Dependencies</dt>
-          <dd>
-            <ul>
-              {% for d in entry.dependencies %}
-              {% if d.type == 'toolbox' %}
-              {% set href = d['@id'] or d.uri %}
-              <li class="dep-toolbox"><a href="{{ href }}" title="{{ d.description }}">{{ d.name or 'Toolbox' }}</a></li>
-              {% elif d.type == 'python' %}
-              <li class="dep-python">{{ d.name or d.path }}{% if d.version %} ({{ d.version }}){% endif %}</li>
-              {% else %}
-              <li class="dep-system">{{ d.name }}{% if d.version %} ({{ d.version }}){% endif %}</li>
-              {% endif %}
-              {% endfor %}
-            </ul>
-          </dd>
-          {% endif %}
+          <dt>URL</dt>
+          <dd><a href="{{ url }}">{{ url }}</a></dd>
+
         </dl>
-
-        {% include 'entries/metadata.html' %}
       </div>
       <div class="col-md-6">
-        <dl>
-          <dt>Homepage</dt>
-          <dd><a href="{{ entry.homepage }}">{{ entry.homepage }}</a></dd>
-
-          <dt>Description</dt>
-          <dd>{{ entry.description|safe }}</dd>
-
-          {% if entry.license %}
-          <dt>License</dt>
-          <dd><a href="{{ entry.license }}">{{ entry.license }}</a></dd>
-          {% endif %}
+        <dl class="metadata">
+          <dt>Created at</dt>
+          <dd>{{ entry.metadata.created_at.strftime('%H:%M %Y-%m-%d') }}</dd>
+          <dt>Author</dt>
+          <dd>{{ entry.metadata.author }}</dd>
+          <dt>Version</dt>
+          <dd>{{ entry.metadata.version }}</dd>
         </dl>
       </div>
-    </div>
-
-    <p>
-      <button type="button" class="btn btn-info" data-toggle="collapse" data-target="#source_{{entry._id}}">JSON</button>
-    </p>
-    <div id="source_{{entry._id}}" class="collapse">
-      <script type="syntaxhighlighter" class="brush: js"><![CDATA[{{ entry_json|safe }}]]></script>
     </div>
   </div>
 </div>

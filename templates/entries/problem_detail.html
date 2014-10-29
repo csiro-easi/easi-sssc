@@ -1,16 +1,15 @@
 {% extends 'entries/detail.html' %}
 
-{% block content %}
-{{ super() }}
+{% block details %}
+{# Don't need depdencies here #}
 
 <div class="panel panel-default">
   <div class="panel-heading"><h2 class="panel-title">Solutions</h2></div>
   <div class="panel-body">
-    <ul>
-      {% for solution in solutions %}
-      <li><a href="{{ solution['@id'] }}" title="{{ solution.description }}">{{solution.name}}</a></li>
-      {% endfor %}
-    </ul>
+    {% with %}
+    {% set entries = solutions %}
+    {% include 'entries/results.html' %}
+    {% endwith %}
   </div>
 </div>
 

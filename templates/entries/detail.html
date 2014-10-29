@@ -2,15 +2,37 @@
 
 {% block page_header %}
 <div class="page-header">
-  <h1>{{ entry_type }}: {{ entry.name }}</h1>
+  <h1>{{ entry_type }}: {{ entry.name }} <button type="button" class="btn btn-info pull-right" data-toggle="modal" data-target=".api-json-modal">API JSON</button></h1>
 </div>
 {% endblock %}
 
 {% block content %}
 {% include 'entries/entry.html' %}
 
+{% block details %}
+{% if entry.dependencies %}
+<div class="panel panel-default">
+  <div class="panel-heading"><h2 class="panel-title">Dependencies</h2></div>
+  <div class="panel-body">
+    <ul>
+      {% for d in entry.dependencies %}
+      {% if d.type == 'python' %}
+      <li class="dep-python">{{ d.name or d.path }}{% if d.version %} ({{ d.version }}){% endif %}</li>
+      {% else %}
+      <li class="dep-system">{{ d.name }}{% if d.version %} ({{ d.version }}){% endif %}</li>
+      {% endif %}
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% set api_json = entry.to_json(indent=4) %}
+{% include 'entries/api_json.html' %}
+
 {% endblock %}
 
 {% block js_footer %}
-  <script type="text/javascript">SyntaxHighlighter.all()</script>
+<script type="text/javascript">SyntaxHighlighter.all()</script>
 {% endblock %}

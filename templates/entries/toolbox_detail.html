@@ -1,7 +1,6 @@
 {% extends 'entries/detail.html' %}
 
-{% block content %}
-{{ super() }}
+{% block details %}
 
 <div class="panel panel-default">
   <div class="panel-heading"><h2 class="panel-title">Dependent solutions</h2></div>
@@ -13,5 +12,7 @@
     </ul>
   </div>
 </div>
+
+{{ super() }}
 
 {% endblock %}

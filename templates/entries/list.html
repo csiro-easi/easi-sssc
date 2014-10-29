@@ -2,17 +2,20 @@
 
 {% block page_header %}
   <div class="page-header">
-    <h1>{{ entry_type }}</h1>
+    <h1>{{ entry_type }} <button type="button" class="btn btn-info pull-right" data-toggle="modal" data-target=".api-json-modal">API JSON</button></h1>
   </div>
 {% endblock %}
 
 
 {% block content %}
-  {% for entry, entry_json in entries %}
+  {% for entry in entries %}
   {% include 'entries/entry.html' %}
   {% endfor %}
+
+  {% set api_json = entries.to_json(indent=4) %}
+  {% include 'entries/api_json.html' %}
 {% endblock %}
 
 {% block js_footer %}
-  <script type="text/javascript">SyntaxHighlighter.all()</script>
+<script type="text/javascript">SyntaxHighlighter.all()</script>
 {% endblock %}

@@ -1,34 +1,64 @@
-from flask import Blueprint, request, render_template, url_for, jsonify, make_response, abort, json
+from flask import Blueprint, request, render_template, url_for, jsonify, make_response, json, abort
 from flask.views import MethodView
 from markdown import markdown
-from scm import mongo
-from scm.models import Toolbox, Entry, Problem, Solution
+from app import app
+from models import Toolbox, Entry, Problem, Solution, Metadata, text_search
 from werkzeug.exceptions import NotAcceptable
 from bson import ObjectId
 
 site = Blueprint('site', __name__, template_folder='templates')
 
-model_endpoint = {
+
+_model_endpoint = {
     'Toolbox': 'site.toolbox',
     'Solution': 'site.solution',
     'Problem': 'site.problem'
 }
 
-cls_endpoint = {
-    'toolbox': 'site.toolbox',
-    'solution': 'site.solution',
-    'problem': 'site.problem'
-}
+
+def entry_endpoint(entry):
+    if entry:
+        return _model_endpoint.get(type(entry).__name__)
+
+
+def entry_url(entry):
+    """Return the URL for entry."""
+    if entry:
+        return url_for(entry_endpoint(entry),
+                       _external=True,
+                       entry_id=entry.id)
 
 
 def id_url(object_id):
     """Return an absolute URL for the object with object_id."""
     if isinstance(object_id, ObjectId):
-        o = mongo.db.entry.find_one(object_id)
-        if o:
-            return url_for(cls_endpoint[o['_cls']],
-                           _external=True,
-                           entry_id=object_id)
+        return entry_url(Entry.get(_id=object_id))
+
+
+@app.template_filter('markdown')
+def markdown_filter(md):
+    return markdown(md)
+
+
+@site.context_processor
+def entry_processor():
+    return dict(entry_url=entry_url, id_url=id_url)
+
+
+def get_or_404(*args, **kwargs):
+    """Return the Entry matching the query or call abort(404) if not found."""
+    entry = Entry.objects.get(*args, **kwargs)
+    if not entry:
+        abort(404)
+    else:
+        return entry
+
+
+def pluralise(name):
+    """Return the pluralised form of name."""
+    ES_ENDS = ['j', 's', 'x']
+    suffix = "es" if name[-1] in ES_ENDS else "s"
+    return "{}{}".format(name, suffix)
 
 
 def fix_ids(entry):
@@ -74,17 +104,13 @@ def for_api(entry):
 
 
 class EntryView(MethodView):
-
     list_keys = ['_id', 'name', 'description',
                  'homepage', 'license', 'metadata']
     detail_template = 'entries/detail.html'
 
     """Handle a single entry."""
     def get(self, entry_id):
-        entry = mongo.db.entry.find_one_or_404(entry_id)
-        if not self.model.is_model_for(entry):
-            abort(404)
-        entry = for_api(entry)
+        entry = Entry.objects().get(id=entry_id)
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
         if best == "application/json":
@@ -97,173 +123,108 @@ class EntryView(MethodView):
 
     def delete(self, entry_id):
         """Delete an entry."""
-        entry = self._find_entry(entry_id)
+        id = None
+        entry = get_or_404(id=entry_id)
         if entry:
+            id = entry.id
             entry.delete()
         return id
 
     def detail_template_args(self, entry):
         return dict(entry=entry,
-                    entry_type=self.model.__name__,
+                    entry_type=type(entry).__name__,
                     entry_json=json.dumps(entry, indent=4))
 
 
 class ProblemView(EntryView):
-    model = Problem
-    endpoint = 'site.problem'
     detail_template = 'entries/problem_detail.html'
 
     def detail_template_args(self, entry):
-        solutions = map(
-            for_api,
-            mongo.db.entry.find({
-                '_cls': 'solution',
-                'problem': ObjectId(entry['_id'])
-            })
-        )
+        solutions = Solution.objects(problem=entry)
         return dict(super().detail_template_args(entry),
                     solutions=solutions)
 
 
 class SolutionView(EntryView):
-    model = Solution
-    endpoint = 'site.solution'
     detail_template = 'entries/solution_detail.html'
 
 
 class ToolboxView(EntryView):
-    model = Toolbox
-    endpoint = 'site.toolbox'
     detail_template = 'entries/toolbox_detail.html'
 
     def detail_template_args(self, entry):
-        dependents = map(
-            for_api,
-            mongo.db.entry.find({
-                '_cls': 'solution',
-                'dependencies': {
-                    'type': 'toolbox',
-                    'uri': ObjectId(entry['_id'])
-                }
-            })
-        )
+        dependents = Solution.objects(toolbox=entry)
         return dict(super().detail_template_args(entry),
                     dependents=dependents)
 
 
 class EntriesView(MethodView):
-
     model = Entry
-    entry_view = EntryView
 
     """Handle all entries."""
     def get(self, format=None):
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
-        entries = map(for_api, mongo.db.entry.find(self.model.query))
+        entries = self.model.objects
         if best == "application/json":
-            return jsonify(dict([(e['_id'], e) for e in entries]))
+            return jsonify(dict(entries=entries))
         elif best == "text/html":
             return render_template(
                 'entries/list.html',
-                entry_type=self.pluralise(),
-                entries=[(e, json.dumps(e, indent=4)) for e in entries]
+                entry_type=pluralise(self.model.__name__),
+                entries=entries,
             )
         else:
             return NotAcceptable
 
     def post(self):
         """Adds the new entry."""
-        entry = request.get_json()
+        entry = self.model.from_json(request.data.decode())
         if entry:
-            entry = self.model.create(entry)
-            if entry:
-                new_id = entry['_id']
-                tbox = request.args.get('tbox')
-                if tbox:
-                    mongo.db.entry.update(
-                        { '_id': new_id },
-                        { '$addToSet': {
-                            'dependencies': {
-                                'type': 'toolbox',
-                                'uri': ObjectId(tbox)
-                            }
-                        }}
-                    )
-                problem = request.args.get('problem')
-                if problem:
-                    mongo.db.entry.update(
-                        { '_id': new_id },
-                        { '$set': {
-                            'problem': ObjectId(problem)
-                        }}
-                    )
-                resp = make_response(str(new_id), 201)
-                resp.location = id_url(new_id)
-                return resp
-
-    def for_api(self, entry):
-        """Only keep generic fields (metadata etc) for a list of entries."""
-        # Keep generic fields
-        e = dict([(k, v)
-                  for k, v in entry.items()
-                  if k in ['_id', 'name', 'description',
-                           'homepage', 'license', 'metadata']])
-        # Default processing
-        return super().for_api(e)
-
-    def pluralise(self):
-        """Return the pluralised form of the model name."""
-        name = self.model.__name__
-        ES_ENDS = ['j', 's', 'x']
-        suffix = "es" if name[-1] in ES_ENDS else "s"
-        return "{}{}".format(name, suffix)
+            # Add the metadata
+            entry.metadata = Metadata()
+            tbox = request.args.get('tbox')
+            if tbox:
+                tbox = get_or_404(id=tbox)
+                entry.toolbox = tbox
+            problem = request.args.get('problem')
+            if problem:
+                problem = get_or_404(id=problem)
+                entry.problem = problem
+            entry.save()
+            resp = make_response(str(entry.id), 201)
+            resp.location = entry_url(entry)
+            return resp
 
 
 class ProblemsView(EntriesView):
     model = Problem
-    entry_view = ProblemView
 
 
 class ToolboxesView(EntriesView):
     model = Toolbox
-    entry_view = ToolboxView
 
 
 class SolutionsView(EntriesView):
     model = Solution
-    entry_view = SolutionView
 
     def _find_toolbox(self, tbox_id):
         """Return the short description of a toolbox."""
-        toolbox = mongo.db.entry.find_one(
-            tbox_id,
-            fields=['name', 'description', 'homepage']
-        )
-        toolbox['@id'] = toolbox['_id']
-        del toolbox['_id']
-        toolbox['type'] = 'toolbox'
+        toolbox = Toolbox.objects.get(_id=tbox_id).only("name",
+                                                        "description",
+                                                        "homepage")
         return toolbox
-
-    def for_api(self, entry):
-        """Keep toolbox dependencies as well as generic fields."""
-        toolboxes = self.fix_ids([self._find_toolbox(d['uri'])
-                                  for d in entry['dependencies']
-                                  if d['type'] == 'toolbox'])
-        entry = super().for_api(entry)
-        entry['dependencies'] = toolboxes
-        return entry
 
 
 # Dispatch to json/html views
 site.add_url_rule('/toolboxes',
-                     view_func=ToolboxesView.as_view('toolboxes'))
+                  view_func=ToolboxesView.as_view('toolboxes'))
 site.add_url_rule('/toolboxes/<ObjectId:entry_id>',
-                     view_func=ToolboxView.as_view('toolbox'))
+                  view_func=ToolboxView.as_view('toolbox'))
 site.add_url_rule('/solutions',
-                     view_func=SolutionsView.as_view('solutions'))
+                  view_func=SolutionsView.as_view('solutions'))
 site.add_url_rule('/solutions/<ObjectId:entry_id>',
-                     view_func=SolutionView.as_view('solution'))
+                  view_func=SolutionView.as_view('solution'))
 site.add_url_rule('/problems',
                   view_func=ProblemsView.as_view('problems'))
 site.add_url_rule('/problems/<ObjectId:entry_id>',
@@ -293,12 +254,16 @@ def search():
     else:
         search = request.args.get("search")
     if search:
-        results = mongo.db.entry.find({"$text": {"$search": search}})
+        results = text_search(search)
     return render_template('search_results.html',
                            search=search,
-                           results=list(map(for_api, results)))
+                           results=list(results))
 
 
 @site.route('/')
 def index():
     return render_template('index.html')
+
+
+# Main site
+app.register_blueprint(site)

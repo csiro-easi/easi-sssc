@@ -12,13 +12,11 @@
 {% if results|length == 0 %}
 <p>No matches</p>
 {% else %}
-<div class="list-group">
-  {% for result in results %}
-  <a href="{{ result['@id'] }}" class="list-group-item">
-    <h4 class="list-group-item-heading">{{ result.type }}: {{ result.name }}</h4>
-    <p class="list-group-item-text">{{ result.description|truncate(250)|striptags }}</p>
-  </a>
-  {% endfor %}
+{% with %}
+{% set entries = results %}
+{% set include_type = True %}
+{% include 'entries/results.html' %}
+{% endwith %}
 </div>
 {% endif  %}
 {% endblock %}

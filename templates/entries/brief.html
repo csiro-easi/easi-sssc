@@ -1,0 +1,12 @@
+{% set url = entry_url(entry) %}
+
+<dl>
+  <dt>Name</dt>
+  <dd>{{ entry.name }}</dd>
+
+  <dt>Description</dt>
+  <dd>{{ entry.description|markdown|safe }}</dd>
+
+  <dt>URL</dt>
+  <dd><a href="{{ url }}">{{ url }}</a></dd>
+</dl>
