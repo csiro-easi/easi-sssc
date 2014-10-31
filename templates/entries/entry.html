@@ -19,11 +19,11 @@
       <div class="col-md-6">
         <dl class="metadata">
           <dt>Created at</dt>
-          <dd>{{ entry.metadata.created_at.strftime('%H:%M %Y-%m-%d') }}</dd>
+          <dd>{{ entry.created_at.strftime('%H:%M %Y-%m-%d') }}</dd>
           <dt>Author</dt>
-          <dd>{{ entry.metadata.author }}</dd>
+          <dd><a href="{{ entry_url(entry.author) }}">{{ entry.author.name }}</a></dd>
           <dt>Version</dt>
-          <dd>{{ entry.metadata.version }}</dd>
+          <dd>{{ entry.version }}</dd>
         </dl>
       </div>
     </div>

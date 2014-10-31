@@ -1,5 +1,8 @@
 import datetime
-from mongoengine import *
+# from mongoengine import *
+from peewee import *
+from app import db
+
 
 # Valid source repositories
 SOURCE_TYPES = (('git', 'GIT repository'),
@@ -28,34 +31,49 @@ def text_search(text):
     instances.
 
     """
-    return pymongo_find({"$text": {"$search": text}})
+    # return pymongo_find({"$text": {"$search": text}})
+    return text
 
 
-def pymongo_find(query):
-    """Performs a find(query) using the PyMongo connection directly.
+# def pymongo_find(query):
+#     """Performs a find(query) using the PyMongo connection directly.
 
-    Wraps the dict results in model instances before returning them.
+#     Wraps the dict results in model instances before returning them.
 
-    """
-    results = Entry._get_collection().find(query, fields="_id")
-    if results:
-        return Entry.objects(id__in=[result['_id'] for result in results])
+#     """
+#     results = Entry._get_collection().find(query, fields="_id")
+#     if results:
+#         return Entry.objects(id__in=[result['_id'] for result in results])
 
 
-class User(Document):
+class BaseModel(Model):
+    class Meta:
+        database = db
+
+    def to_dict(self):
+        j = dict()
+        for k in self._data.keys():
+            v = getattr(self, k)
+            if isinstance(v, BaseModel):
+                v = v.to_dict()
+            j[k] = v
+        if 'type' not in j:
+            j['type'] = type(self).__name__
+        return j
+
+
+class User(BaseModel):
     """Catalogue user."""
-    email = EmailField(primary_key=True)
-    name = StringField()
+    id = PrimaryKeyField()
+    email = CharField(unique=True)
+    name = CharField()
 
 
-class Metadata(EmbeddedDocument):
-    """Metadata for all catalogue entries."""
-    created_at = DateTimeField(default=datetime.datetime.now)
-    author = ReferenceField(User)  # , required=True)
-    version = IntField(default=1)
+# class Metadata(EmbeddedDocument):
+#     """Metadata for all catalogue entries."""
 
 
-class Entry(Document):
+class Entry(BaseModel):
     """Base information shared by all entries.
 
     name -- Short name
@@ -63,26 +81,100 @@ class Entry(Document):
     metadata -- Catalogue metadata
 
     """
-    name = StringField(required=True)
-    description = StringField()
-    metadata = EmbeddedDocumentField(Metadata, required=True)
-
-    meta = {
-        # MongoEngine on pip doesn't support text indexes yet
-        # 'indexes': [('$name', '$description')],
-        'allow_inheritance': True
-    }
-
-    def type(self):
-        return self._cls.split('.')[-1]
+    id = PrimaryKeyField()
+    name = CharField()
+    description = TextField()
+    created_at = DateTimeField(default=datetime.datetime.now)
+    author = ForeignKeyField(User, related_name="entries")  # , required=True)
+    version = IntegerField(default=1)
 
 
-class License(EmbeddedDocument):
-    name = StringField()
-    url = URLField()
+class EntryMixin(BaseModel):
+    entry = ForeignKeyField(Entry)
+
+    def to_dict(self):
+        d = super().to_dict()
+        for x in ['name', 'description', 'author', 'version', 'created_at',
+                  'dependencies']:
+            if x in d['entry']:
+                d[x] = d['entry'][x]
+        del d['entry']
+        return d
+
+    """Delegate Entry property access to the entry field instance."""
+    def getName(self):
+        return self.entry.name
+
+    def setName(self, name):
+        self.entry.name = name
+
+    name = property(getName, setName)
+
+    def getDescription(self):
+        return self.entry.description
+
+    def setDescription(self, description):
+        self.entry.description = description
+
+    description = property(getDescription, setDescription)
+
+    def getCreated_At(self):
+        return self.entry.created_at
+
+    def setCreated_At(self, created_at):
+        self.entry.created_at = created_at
+
+    created_at = property(getCreated_At, setCreated_At)
+
+    def getAuthor(self):
+        return self.entry.author
+
+    def setAuthor(self, author):
+        self.entry.author = author
+
+    author = property(getAuthor, setAuthor)
+
+    def getVersion(self):
+        return self.entry.version
+
+    def setVersion(self, version):
+        self.entry.version = version
+
+    version = property(getVersion, setVersion)
+
+    def getDependencies(self):
+        return self.entry.dependencies
+
+    def setDependencies(self, dependencies):
+        self.entry.dependencies = dependencies
+
+    dependencies = property(getDependencies, setDependencies)
 
 
-class Source(EmbeddedDocument):
+class License(BaseModel):
+    name = CharField(null=True)
+    url = CharField(null=True)
+
+
+class Dependency(BaseModel):
+    """Dependency on an external package."""
+    type = CharField(choices=DEPENDENCY_TYPES)
+    name = CharField(null=True)
+    version = CharField(null=True)
+    path = CharField(null=True)
+    entry = ForeignKeyField(Entry, related_name="dependencies")
+
+
+class Problem(EntryMixin):
+    """A problem to be solved.
+
+    Requires nothing extra over Entry.
+
+    """
+    pass
+
+
+class Source(BaseModel):
     """Source for a scientific code.
 
     type -- Repository type (git, svn)
@@ -91,21 +183,25 @@ class Source(EmbeddedDocument):
     exec -- Optional setup script
 
     """
-    type = StringField(choices=SOURCE_TYPES, required=True)
-    url = URLField(required=True)
-    checkout = StringField()
-    exec = StringField()
+    type = CharField(choices=SOURCE_TYPES)
+    url = CharField()
+    checkout = CharField(null=True)
+    exec = TextField(null=True)
 
 
-class Dependency(EmbeddedDocument):
-    """Dependency on an external package."""
-    type = StringField(choices=DEPENDENCY_TYPES, required=True)
-    name = StringField()
-    version = StringField()
-    path = StringField()
+class Toolbox(EntryMixin):
+    homepage = CharField(null=True)
+    license = ForeignKeyField(License, related_name="toolboxes")
+    source = ForeignKeyField(Source, related_name="toolboxes")
 
 
-class Var(EmbeddedDocument):
+class Solution(EntryMixin):
+    problem = ForeignKeyField(Problem, related_name="solutions")
+    toolbox = ForeignKeyField(Toolbox, related_name="solutions")
+    template = TextField()
+
+
+class Var(BaseModel):
     """Variable in a Solution template.
 
     name -- Placeholder name in the template
@@ -118,37 +214,21 @@ class Var(EmbeddedDocument):
     step -- Increment between min and max
 
     """
-    name = StringField(required=True)
-    type = StringField(choices=VARIABLE_TYPES)
-    label = StringField(max_length=50)
-    description = StringField()
+    name = CharField()
+    type = CharField(choices=VARIABLE_TYPES)
+    label = CharField(null=True)
+    description = TextField(null=True)
     optional = BooleanField(default=False)
-    default = DynamicField()
-    min = FloatField()
-    max = FloatField()
-    step = FloatField()
-    values = ListField()
+    default = CharField(null=True)
+    min = DoubleField(null=True)
+    max = DoubleField(null=True)
+    step = DoubleField(null=True)
+    values = CharField(null=True)
+    solution = ForeignKeyField(Solution, related_name="variables")
 
 
-class Problem(Entry):
-    """A problem to be solved.
-
-    Requires nothing extra over Entry.
-
-    """
-    pass
-
-
-class Toolbox(Entry):
-    homepage = URLField()
-    license = EmbeddedDocumentField(License)
-    source = EmbeddedDocumentField(Source, required=True)
-    dependencies = ListField(EmbeddedDocumentField(Dependency))
-
-
-class Solution(Entry):
-    problem = ReferenceField(Problem, required=True)
-    toolbox = ReferenceField(Toolbox)
-    template = StringField(required=True)
-    variables = ListField(EmbeddedDocumentField(Var), required=True)
-    depedencies = ListField(EmbeddedDocumentField(Dependency))
+def create_database(db):
+    """Create the database for our models."""
+    db.create_tables([User, Entry, License, Dependency, Problem, Toolbox,
+                      Solution, Var, Source],
+                     safe=True)

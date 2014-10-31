@@ -1,10 +1,13 @@
-from flask import Blueprint, request, render_template, url_for, jsonify, make_response, json, abort
+from flask import (Blueprint, request, render_template, url_for, jsonify,
+                   make_response, json, abort)
 from flask.views import MethodView
 from markdown import markdown
 from app import app
-from models import Toolbox, Entry, Problem, Solution, Metadata, text_search
+from models import Toolbox, Entry, Problem, Solution, text_search, User
 from werkzeug.exceptions import NotAcceptable
-from bson import ObjectId
+from peewee import SelectQuery
+# from bson import ObjectId
+# from mongoengine import QuerySet, EmbeddedDocument
 
 site = Blueprint('site', __name__, template_folder='templates')
 
@@ -12,27 +15,30 @@ site = Blueprint('site', __name__, template_folder='templates')
 _model_endpoint = {
     'Toolbox': 'site.toolbox',
     'Solution': 'site.solution',
-    'Problem': 'site.problem'
+    'Problem': 'site.problem',
+    'User': 'site.user'
 }
 
 
 def entry_endpoint(entry):
     if entry:
-        return _model_endpoint.get(type(entry).__name__)
+        if isinstance(entry, dict):
+            entry_type = entry.get('type')
+        else:
+            entry_type = type(entry).__name__
+        return _model_endpoint.get(entry_type)
 
 
 def entry_url(entry):
     """Return the URL for entry."""
     if entry:
+        if isinstance(entry, dict):
+            entry_id = entry['id']
+        else:
+            entry_id = entry.id
         return url_for(entry_endpoint(entry),
                        _external=True,
-                       entry_id=entry.id)
-
-
-def id_url(object_id):
-    """Return an absolute URL for the object with object_id."""
-    if isinstance(object_id, ObjectId):
-        return entry_url(Entry.get(_id=object_id))
+                       entry_id=entry_id)
 
 
 @app.template_filter('markdown')
@@ -42,7 +48,7 @@ def markdown_filter(md):
 
 @site.context_processor
 def entry_processor():
-    return dict(entry_url=entry_url, id_url=id_url)
+    return dict(entry_url=entry_url)
 
 
 def get_or_404(*args, **kwargs):
@@ -61,19 +67,26 @@ def pluralise(name):
     return "{}{}".format(name, suffix)
 
 
-def fix_ids(entry):
-    """Return a copy of entry with ObjectIds replaced with URLs. """
-    if isinstance(entry, ObjectId):
-        return id_url(entry)
-    elif isinstance(entry, dict):
-        return dict(map(fix_ids, entry.items()))
-    elif isinstance(entry, tuple):
-        k, v = entry
-        return (k, fix_ids(v))
-    elif isinstance(entry, list):
-        return list(map(fix_ids, entry))
-    else:
-        return entry
+def _fixup(entry):
+    """Return entry dict modified for the API.
+
+    Insert '@id' entries with URLs.
+    Remove internal fields (id on non-Entries).
+    Remove User details
+
+    """
+    def f(d):
+        if d['type'] in _model_endpoint:
+            d['@id'] = entry_url(d)
+        elif 'id' in d:
+            del d['id']
+        if d['type'] == 'User':
+            d = dict(name=d['name'])
+        for k, v in d.items():
+            if isinstance(v, dict):
+                d[k] = f(v)
+        return d
+    return f(entry.to_dict())
 
 
 def for_api(entry):
@@ -83,24 +96,13 @@ def for_api(entry):
     string version of the ObjectId. Remove other internal
     attributes (like '_cls'). Fix ids for external use.
 
+    If entry is a list of entries, return a dict where entries = a
+    list of api entries.
+
     """
-    # Copy the entry
-    entry = dict(entry)
-
-    # Rename the _cls field
-    if '_cls' in entry:
-        entry['type'] = entry['_cls']
-        del entry['_cls']
-
-    # Update the id field
-    entry['@id'] = entry['_id']
-    entry['_id'] = str(entry['_id'])
-
-    # Render markdown in descriptions
-    entry['description'] = markdown(entry['description'])
-
-    # Replace ObjectIds with URIs
-    return fix_ids(entry)
+    if isinstance(entry, list) or isinstance(entry, SelectQuery):
+        return dict(entries=[_fixup(e) for e in entry])
+    return _fixup(entry)
 
 
 class EntryView(MethodView):
@@ -110,11 +112,11 @@ class EntryView(MethodView):
 
     """Handle a single entry."""
     def get(self, entry_id):
-        entry = Entry.objects().get(id=entry_id)
+        entry = self.query(entry_id)
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
         if best == "application/json":
-            return jsonify(entry)
+            return jsonify(self.for_api(entry))
         elif best == "text/html":
             return render_template(self.detail_template,
                                    **self.detail_template_args(entry))
@@ -133,29 +135,56 @@ class EntryView(MethodView):
     def detail_template_args(self, entry):
         return dict(entry=entry,
                     entry_type=type(entry).__name__,
-                    entry_json=json.dumps(entry, indent=4))
+                    api_json=json.dumps(self.for_api(entry), indent=4))
+
+    def query(self, entry_id):
+        return Entry.get(Entry.id == entry_id)
+
+    def for_api(self, entry):
+        return for_api(entry)
 
 
 class ProblemView(EntryView):
     detail_template = 'entries/problem_detail.html'
 
-    def detail_template_args(self, entry):
-        solutions = Solution.objects(problem=entry)
-        return dict(super().detail_template_args(entry),
-                    solutions=solutions)
+    def query(self, entry_id):
+        return Problem.get(Problem.id == entry_id)
 
 
 class SolutionView(EntryView):
     detail_template = 'entries/solution_detail.html'
 
+    def query(self, entry_id):
+        return Solution.get(Solution.id == entry_id)
+
 
 class ToolboxView(EntryView):
     detail_template = 'entries/toolbox_detail.html'
 
-    def detail_template_args(self, entry):
-        dependents = Solution.objects(toolbox=entry)
-        return dict(super().detail_template_args(entry),
-                    dependents=dependents)
+    def query(self, entry_id):
+        return Toolbox.get(Toolbox.id == entry_id)
+
+
+class UserView(MethodView):
+    def get(self, entry_id):
+        user = User.get(User.id == entry_id)
+        if not user:
+            abort(404)
+        return render_template(
+            'user_detail.html',
+            user=user,
+            problems=(Problem
+                      .select()
+                      .join(Entry)
+                      .where(Entry.author == user)),
+            solutions=(Solution
+                       .select()
+                       .join(Entry)
+                       .where(Entry.author == user)),
+            toolboxes=(Toolbox
+                       .select()
+                       .join(Entry)
+                       .where(Entry.author == user)))
 
 
 class EntriesView(MethodView):
@@ -165,24 +194,26 @@ class EntriesView(MethodView):
     def get(self, format=None):
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
-        entries = self.model.objects
+        entries = self.query()
         if best == "application/json":
-            return jsonify(dict(entries=entries))
+            return jsonify(self.for_api(entries))
         elif best == "text/html":
             return render_template(
                 'entries/list.html',
                 entry_type=pluralise(self.model.__name__),
                 entries=entries,
+                api_json=json.dumps(self.for_api(entries), indent=4)
             )
         else:
             return NotAcceptable
 
     def post(self):
         """Adds the new entry."""
-        entry = self.model.from_json(request.data.decode())
+        # entry = self.model.from_json(request.data.decode())
+        entry = self.model.from_json(request.get_json())
         if entry:
             # Add the metadata
-            entry.metadata = Metadata()
+            entry.entry.author = User.get(User.email == "fred@example.org")
             tbox = request.args.get('tbox')
             if tbox:
                 tbox = get_or_404(id=tbox)
@@ -196,39 +227,62 @@ class EntriesView(MethodView):
             resp.location = entry_url(entry)
             return resp
 
+    def query(self):
+        """Return a SelectQuery instance with results for this view."""
+        return Entry.select()
+
+    def for_api(self, entries):
+        # Strip out extra details
+        entries = for_api(entries)
+        for entry in entries['entries']:
+            keys = list(entry.keys())
+            for k in keys:
+                if k not in ['id', '@id', 'name', 'description', 'created_at',
+                             'author', 'version']:
+                    del entry[k]
+        return entries
+
 
 class ProblemsView(EntriesView):
     model = Problem
+
+    def query(self):
+        return Problem.select()
 
 
 class ToolboxesView(EntriesView):
     model = Toolbox
 
+    def query(self):
+        return Toolbox.select()
+
 
 class SolutionsView(EntriesView):
     model = Solution
 
-    def _find_toolbox(self, tbox_id):
-        """Return the short description of a toolbox."""
-        toolbox = Toolbox.objects.get(_id=tbox_id).only("name",
-                                                        "description",
-                                                        "homepage")
-        return toolbox
+    def query(self):
+        #solutions = Solution.objects.exclude("dependencies", "template", "variables")
+        # for s in solutions:
+        #     s.toolbox = Toolbox.objects(id=s.toolbox).only("name", "description", "homepage").get()
+        solutions = Solution.select()
+        return solutions
 
 
 # Dispatch to json/html views
 site.add_url_rule('/toolboxes',
                   view_func=ToolboxesView.as_view('toolboxes'))
-site.add_url_rule('/toolboxes/<ObjectId:entry_id>',
+site.add_url_rule('/toolboxes/<int:entry_id>',
                   view_func=ToolboxView.as_view('toolbox'))
 site.add_url_rule('/solutions',
                   view_func=SolutionsView.as_view('solutions'))
-site.add_url_rule('/solutions/<ObjectId:entry_id>',
+site.add_url_rule('/solutions/<int:entry_id>',
                   view_func=SolutionView.as_view('solution'))
 site.add_url_rule('/problems',
                   view_func=ProblemsView.as_view('problems'))
-site.add_url_rule('/problems/<ObjectId:entry_id>',
+site.add_url_rule('/problems/<int:entry_id>',
                   view_func=ProblemView.as_view('problem'))
+site.add_url_rule('/users/<int:entry_id>',
+                  view_func=UserView.as_view('user'))
 
 
 @site.route('/add/problem')
@@ -262,6 +316,7 @@ def search():
 
 @site.route('/')
 def index():
+    print("Index!")
     return render_template('index.html')
 
 

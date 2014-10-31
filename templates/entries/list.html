@@ -12,7 +12,6 @@
   {% include 'entries/entry.html' %}
   {% endfor %}
 
-  {% set api_json = entries.to_json(indent=4) %}
   {% include 'entries/api_json.html' %}
 {% endblock %}
 
