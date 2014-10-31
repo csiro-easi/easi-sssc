@@ -3,9 +3,10 @@ from flask import (Blueprint, request, render_template, url_for, jsonify,
 from flask.views import MethodView
 from markdown import markdown
 from app import app
-from models import Toolbox, Entry, Problem, Solution, text_search, User
+from models import Toolbox, Entry, Problem, Solution, text_search, User, to_dict, Var, Dependency
 from werkzeug.exceptions import NotAcceptable
 from peewee import SelectQuery
+from flask_peewee.utils import get_dictionary_from_model
 # from bson import ObjectId
 # from mongoengine import QuerySet, EmbeddedDocument
 
@@ -39,6 +40,15 @@ def entry_url(entry):
         return url_for(entry_endpoint(entry),
                        _external=True,
                        entry_id=entry_id)
+
+
+def _keep_keys(obj, keep=[]):
+    """Return a dict copy of obj with only the items with keys in keys."""
+    def f(t):
+        k, v = t
+        if k in keep:
+            return k, v
+    return dict(filter(f, obj.items()))
 
 
 @app.template_filter('markdown')
@@ -75,21 +85,32 @@ def _fixup(entry):
     Remove User details
 
     """
+    api_entry = get_dictionary_from_model(entry)
+
     def f(d):
-        if d['type'] in _model_endpoint:
+        if 'type' in d and d['type'] in _model_endpoint:
             d['@id'] = entry_url(d)
-        elif 'id' in d:
-            del d['id']
-        if d['type'] == 'User':
-            d = dict(name=d['name'])
-        for k, v in d.items():
-            if isinstance(v, dict):
-                d[k] = f(v)
-        return d
-    return f(entry.to_dict())
+        for k in d:
+            if isinstance(d[k], dict):
+                d[k] = f(d[k])
+    return f(api_entry)
+    # def f(d):
+    #     if d['type'] in _model_endpoint:
+    #         d['@id'] = entry_url(d)
+    #     elif 'id' in d:
+    #         del d['id']
+    #     if d['type'] == 'User':
+    #         d = _keep_keys(d, ['name'])
+    #     keys = list(d.keys())
+    #     for k in keys:
+    #         if isinstance(d[k], dict):
+    #             d[k] = f(d[k])
+    #     return d
+    # return f(to_dict(entry))
+#return f(entry.to_dict(full))
 
 
-def for_api(entry):
+def for_api(entry, fields=None, exclude=None):
     """Return a copy of entry suitable for returning from the API.
 
     Add an '@id' entry with the ObjectId, and replace '_id' with a
@@ -101,8 +122,9 @@ def for_api(entry):
 
     """
     if isinstance(entry, list) or isinstance(entry, SelectQuery):
-        return dict(entries=[_fixup(e) for e in entry])
-    return _fixup(entry)
+        entries = dict(entries=[_fixup(entry, fields, exclude) for e in entry])
+        return entries
+    return _fixup(entry, fields, exclude)
 
 
 class EntryView(MethodView):
@@ -157,6 +179,14 @@ class SolutionView(EntryView):
     def query(self, entry_id):
         return Solution.get(Solution.id == entry_id)
 
+    def for_api(self, entry):
+        return for_api(entry, fields={
+            Entry: ['id', 'name', 'description', 'author', 'created_at', 'version'],
+            Problem: ['id', 'name', 'description'],
+            Toolbox: ['id', 'name', 'description'],
+            Var: ['name', 'type', 'label', 'min', 'max', 'step', 'optional', 'default']
+        })
+
 
 class ToolboxView(EntryView):
     detail_template = 'entries/toolbox_detail.html'
@@ -164,6 +194,11 @@ class ToolboxView(EntryView):
     def query(self, entry_id):
         return Toolbox.get(Toolbox.id == entry_id)
 
+    def for_api(self, entry):
+        return for_api(entry, fields={
+            Entry: ['id', 'name', 'description', 'author', 'created_at', 'version'],
+            Dependency: Dependency._meta.get_field_names()
+        })
 
 class UserView(MethodView):
     def get(self, entry_id):
@@ -178,6 +213,7 @@ class UserView(MethodView):
 
 class EntriesView(MethodView):
     model = Entry
+    fields = { Entry: ['id', 'name', 'description'] }
 
     """Handle all entries."""
     def get(self, format=None):
@@ -185,7 +221,8 @@ class EntriesView(MethodView):
                                                     "text/html"])
         entries = self.query()
         if best == "application/json":
-            return jsonify(self.for_api(entries))
+            j = self.for_api(entries)
+            return jsonify(j)
         elif best == "text/html":
             return render_template(
                 'entries/list.html',
@@ -222,14 +259,8 @@ class EntriesView(MethodView):
 
     def for_api(self, entries):
         # Strip out extra details
-        entries = for_api(entries)
-        for entry in entries['entries']:
-            keys = list(entry.keys())
-            for k in keys:
-                if k not in ['id', '@id', 'name', 'description', 'created_at',
-                             'author', 'version']:
-                    del entry[k]
-        return entries
+        return dict(entries=[get_dictionary_from_model(e, fields=self.fields)
+                             for e in entries])
 
 
 class ProblemsView(EntriesView):
@@ -248,14 +279,26 @@ class ToolboxesView(EntriesView):
 
 class SolutionsView(EntriesView):
     model = Solution
+    fields = {
+        Entry: ['name', 'description', 'author', 'created_at', 'version'],
+        Solution: ['entry', 'problem', 'toolbox'],
+        Problem: ['id', 'entry'],
+        Toolbox: ['id', 'entry']
+    }
 
     def query(self):
-        #solutions = Solution.objects.exclude("dependencies", "template", "variables")
-        # for s in solutions:
-        #     s.toolbox = Toolbox.objects(id=s.toolbox).only("name", "description", "homepage").get()
         solutions = Solution.select()
         return solutions
 
+    # def for_api(self, entries):
+    #     # Strip unwanted keys
+    #     entries = super().for_api(entries)
+        # # Reduce problem/toolbox to references
+        # keep = ['@id', 'name', 'description']
+        # for entry in entries['entries']:
+        #     entry['problem'] = _keep_keys(entry['problem'], keep)
+        #     entry['toolbox'] = _keep_keys(entry['toolbox'], keep)
+        # return entries
 
 # Dispatch to json/html views
 site.add_url_rule('/toolboxes',
