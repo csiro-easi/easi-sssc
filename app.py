@@ -4,7 +4,9 @@ from flask import Flask
 # from bson import ObjectId
 # from werkzeug.routing import BaseConverter
 from flask.ext.cors import CORS
-from peewee import SqliteDatabase
+# Use the ext database to get FTS support
+# from peewee import SqliteDatabase
+from playhouse.sqlite_ext import SqliteExtDatabase
 
 app = Flask(__name__)
 app.config.from_pyfile('scm.config')
@@ -14,7 +16,7 @@ app.config['CORS_HEADERS'] = ['Content-Type', 'X-Requested-With']
 cors = CORS(app)
 
 # Connect to the database now to catch any errors here
-db = SqliteDatabase('scm.db')
+db = SqliteExtDatabase('scm.db')
 
 
 @app.before_first_request

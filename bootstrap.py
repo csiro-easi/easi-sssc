@@ -1,7 +1,7 @@
 # coding: utf-8
 
 from app import db
-from models import User, Entry, Problem, Solution, Toolbox, Var, Source, Dependency, License, create_database, drop_tables
+from models import User, Entry, Problem, Solution, Toolbox, Var, Source, Dependency, License, TextContent, create_database, drop_tables
 
 
 def bootstrap():
@@ -17,6 +17,8 @@ def bootstrap():
         author=user
     )
 
+    TextContent.add_entry(anuga_entry)
+
     anuga_problem = Problem.create(entry=anuga_entry)
 
     anuga_entry = Entry.create(
@@ -24,6 +26,7 @@ def bootstrap():
         description="ANUGA is a tool which can simulate events and their effects as they ‘progress’ or travel through a scenario in a model. You can model the ‘wave’ or storm surge to measure the impact and risk for known locations.",
         author=user
     )
+    TextContent.add_entry(anuga_entry)
     anuga_toolbox = Toolbox.create(
         entry=anuga_entry,
         homepage="https://anuga.anu.edu.au",
@@ -41,6 +44,7 @@ def bootstrap():
         description="This template contains a pre-canned event (a wave) entering on the WEST of the grid, heading east, designed for coastal simulations of the Busselton-Bunbury area.\n\nThe implemented solver (Parallel finite volume method for hydrodynamic inundation modelling) is [described here](http://journal.austms.org.au/ojs/index.php/ANZIAMJ/article/view/153/)\n\nAn overview of the solver is [available here](http://www.ga.gov.au/corporate_data/69370/Rec2009_036.pdf).\n\nInputs:\n\nThe template can be customised in a variety of ways \n\n\tXxxx\n\n\tYyyy\n\n\tZzzz\n\nAnd is paired with a DEM of the area in question.\n\n\n\nOutputs:\n\n\tScreenshots of xxx\n\n\tCustom ANUGA SSW (database) of the simulation",
         author=user
     )
+    TextContent.add_entry(anuga_entry)    
     anuga_solution = Solution.create(
         entry=anuga_entry,
         problem=anuga_problem,
@@ -74,10 +78,11 @@ def bootstrap():
                               description="Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
                               author=user)
     tcrm_prob = Problem.create(entry=tcrm_entry)
-
+    TextContent.add_entry(tcrm_entry)
     tcrm_entry = Entry.create(name="Tropical Cyclone Risk Model",
                               description="The Tropical Cyclone Risk Model is a stochastic tropical cyclone model developed by [Geoscience Australia](http://www.ga.gov.au) for estimating the wind hazard from tropical cyclones.",
                               author=user)
+    TextContent.add_entry(tcrm_entry)    
     tcrm_toolbox = Toolbox.create(
         entry=tcrm_entry,
         homepage="https://github.com/GeoscienceAustralia/tcrm",
@@ -94,10 +99,9 @@ def bootstrap():
     Dependency.create(type="system", name="hdf5-devel", entry=tcrm_entry)
     Dependency.create(type="python", path="requirements.txt", entry=tcrm_entry)
 
-    tcrm_solution = Solution.create(
-        entry=Entry.create(
-            name="TCRM example",
-            description="""The template allows for numerous fake events (generated from real events) to occur on a target area, allowing us to compute statistics about the likelihood, size, and patterns arising from generating thousands of years worth of events.
+    tcrm_entry = Entry.create(
+        name="TCRM example",
+        description="""The template allows for numerous fake events (generated from real events) to occur on a target area, allowing us to compute statistics about the likelihood, size, and patterns arising from generating thousands of years worth of events.
 
 
 Inputs:
@@ -109,8 +113,11 @@ Outputs:
 	Track files for each cyclone
 
 	Statistics about risk areas""",
-            author=user
-        ),
+        author=user
+    )
+    TextContent.add_entry(tcrm_entry)
+    tcrm_solution = Solution.create(
+        entry=tcrm_entry,
         homepage="https://github.com/GeoscienceAustralia/tcrm",
         problem=tcrm_prob,
         toolbox=tcrm_toolbox,

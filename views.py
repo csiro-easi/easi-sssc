@@ -172,19 +172,8 @@ class UserView(MethodView):
             abort(404)
         return render_template(
             'user_detail.html',
-            user=user,
-            problems=(Problem
-                      .select()
-                      .join(Entry)
-                      .where(Entry.author == user)),
-            solutions=(Solution
-                       .select()
-                       .join(Entry)
-                       .where(Entry.author == user)),
-            toolboxes=(Toolbox
-                       .select()
-                       .join(Entry)
-                       .where(Entry.author == user)))
+            user=user
+        )
 
 
 class EntriesView(MethodView):
@@ -308,10 +297,10 @@ def search():
     else:
         search = request.args.get("search")
     if search:
-        results = text_search(search)
+        results = [result.entry for result in text_search(search)]
     return render_template('search_results.html',
                            search=search,
-                           results=list(results))
+                           results=results)
 
 
 @site.route('/')

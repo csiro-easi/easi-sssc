@@ -1,6 +1,7 @@
 import datetime
 # from mongoengine import *
 from peewee import *
+from playhouse.sqlite_ext import FTSModel
 from app import db
 
 
@@ -22,17 +23,11 @@ VARIABLE_TYPES = (('int', 'Integer'),
 def text_search(text):
     """Search for entries that match text.
 
-    Performs a basic text search for text. Equivalent to calling:
-
-    pymongo_find({"$text": {"$search": text}})
-
-    Drops to PyMongo for text search support while MongoEngine doesn't
-    support it. Wraps the dict results from pymongo in model
-    instances.
+    Returns instances of TextContent (entry, name, description) that
+    matched.
 
     """
-    # return pymongo_find({"$text": {"$search": text}})
-    return text
+    return TextContent.select().where(TextContent.match(text))
 
 
 # def pymongo_find(query):
@@ -58,8 +53,11 @@ class BaseModel(Model):
                 v = v.to_dict()
             j[k] = v
         if 'type' not in j:
-            j['type'] = type(self).__name__
+            j['type'] = self.type()
         return j
+
+    def type(self):
+        return type(self).__name__
 
 
 class User(BaseModel):
@@ -88,6 +86,15 @@ class Entry(BaseModel):
     author = ForeignKeyField(User, related_name="entries")  # , required=True)
     version = IntegerField(default=1)
 
+    def specific_entry(self):
+        """Return the instance for the specific entry for this Entry."""
+        # Look for the EntryMixin
+        for cls in EntryMixin.__subclasses__():
+            try:
+                return cls.get(cls.entry == self)
+            except DoesNotExist:
+                continue
+
 
 class EntryMixin(BaseModel):
     entry = ForeignKeyField(Entry)
@@ -100,6 +107,10 @@ class EntryMixin(BaseModel):
                 d[x] = d['entry'][x]
         del d['entry']
         return d
+
+    def specific_entry(self):
+        """Return this instance."""
+        return self
 
     """Delegate Entry property access to the entry field instance."""
     def getName(self):
@@ -227,6 +238,24 @@ class Var(BaseModel):
     solution = ForeignKeyField(Solution, related_name="variables")
 
 
+class TextContent(FTSModel):
+    """Store text content from other entries for searching."""
+    name = TextField()
+    description = TextField()
+    entry = ForeignKeyField(Entry)
+
+    class Meta:
+        database = db
+
+    def add_entry(entry):
+        """Add the text index for entry."""
+        TextContent.create(
+            name=entry.name,
+            description=entry.description,
+            entry=entry
+        )
+
+
 _TABLES = [User, Entry, License, Dependency, Problem, Toolbox, Solution, Var,
            Source]
 
@@ -234,8 +263,9 @@ _TABLES = [User, Entry, License, Dependency, Problem, Toolbox, Solution, Var,
 def create_database(db, safe=True):
     """Create the database for our models."""
     db.create_tables(_TABLES, safe=safe)
-
+    TextContent.create_table()
 
 def drop_tables(db):
     """Drop the model tables."""
-    db.drop_tables(_TABLES)
+    db.drop_tables(_TABLES, safe=True)
+    TextContent.drop_table(fail_silently=True)
