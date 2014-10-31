@@ -66,9 +66,8 @@ class User(BaseModel):
     email = CharField(unique=True)
     name = CharField()
 
-
-# class Metadata(EmbeddedDocument):
-#     """Metadata for all catalogue entries."""
+    def __unicode__(self):
+        return self.name
 
 
 class Entry(BaseModel):
@@ -95,6 +94,9 @@ class Entry(BaseModel):
             except DoesNotExist:
                 continue
 
+    def __unicode__(self):
+        return "entry ({})".format(self.name)
+
 
 class EntryMixin(BaseModel):
     entry = ForeignKeyField(Entry)
@@ -111,6 +113,9 @@ class EntryMixin(BaseModel):
     def specific_entry(self):
         """Return this instance."""
         return self
+
+    def __unicode__(self):
+        return "{} ({})".format(self.type(), self.name)
 
     """Delegate Entry property access to the entry field instance."""
     def getName(self):
@@ -166,6 +171,9 @@ class License(BaseModel):
     name = CharField(null=True)
     url = CharField(null=True)
 
+    def __unicode__(self):
+        return name if name else url
+
 
 class Dependency(BaseModel):
     """Dependency on an external package."""
@@ -174,6 +182,9 @@ class Dependency(BaseModel):
     version = CharField(null=True)
     path = CharField(null=True)
     entry = ForeignKeyField(Entry, related_name="dependencies")
+
+    def __unicode__(self):
+        return "({}) {}".format(self.type, self.name if self.name else self.path)
 
 
 class Problem(EntryMixin):
@@ -198,6 +209,9 @@ class Source(BaseModel):
     url = CharField()
     checkout = CharField(null=True)
     exec = TextField(null=True)
+
+    def __unicode__(self):
+        return "source ({}, {})".format(self.type, self.url)
 
 
 class Toolbox(EntryMixin):
@@ -236,6 +250,9 @@ class Var(BaseModel):
     step = DoubleField(null=True)
     values = CharField(null=True)
     solution = ForeignKeyField(Solution, related_name="variables")
+
+    def __unicode__(self):
+        return "{} ({})".format(self.name, self.type)
 
 
 class TextContent(FTSModel):
