@@ -227,8 +227,15 @@ class Var(BaseModel):
     solution = ForeignKeyField(Solution, related_name="variables")
 
 
-def create_database(db):
+_TABLES = [User, Entry, License, Dependency, Problem, Toolbox, Solution, Var,
+           Source]
+
+
+def create_database(db, safe=True):
     """Create the database for our models."""
-    db.create_tables([User, Entry, License, Dependency, Problem, Toolbox,
-                      Solution, Var, Source],
-                     safe=True)
+    db.create_tables(_TABLES, safe=safe)
+
+
+def drop_tables(db):
+    """Drop the model tables."""
+    db.drop_tables(_TABLES)
