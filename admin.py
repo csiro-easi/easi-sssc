@@ -11,9 +11,9 @@ class UserAdmin(ModelView):
     pass
 
 
-class EntryAdmin(ModelView):
-    inline_models = (Problem, Toolbox, Solution)
+class ProblemAdmin(ModelView):
+    pass
 
 
 admin.add_view(UserAdmin(User))
-admin.add_view(EntryAdmin(Entry))
+admin.add_view(ProblemAdmin(Problem))

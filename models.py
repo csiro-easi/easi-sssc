@@ -3,6 +3,7 @@ import datetime
 from peewee import *
 from playhouse.sqlite_ext import FTSModel
 from app import db
+import importlib
 
 
 # Valid source repositories
@@ -23,19 +24,18 @@ VARIABLE_TYPES = (('int', 'Integer'),
 def text_search(text):
     """Search for entries that match text.
 
-    Returns instances of TextContent (entry, name, description) that
-    matched.
+    Returns a list of entries that matched text.
 
     """
-    return TextContent.select().where(TextContent.match(text))
+    matches = [r.problem for r in ProblemIndex.select().where(ProblemIndex.match(text))]
+    matches.extend([r.solution for r in SolutionIndex.select().where(SolutionIndex.match(text))])
+    matches.extend([r.toolbox for r in ToolboxIndex.select().where(ToolboxIndex.match(text))])
+    return matches
 
 
 class BaseModel(Model):
     class Meta:
         database = db
-
-    def entry_type(self):
-        return type(self).__name__
 
 
 class User(BaseModel):
@@ -60,80 +60,11 @@ class Entry(BaseModel):
     name = CharField()
     description = TextField()
     created_at = DateTimeField(default=datetime.datetime.now)
-    author = ForeignKeyField(User, related_name="entries")  # , required=True)
+    author = ForeignKeyField(User)
     version = IntegerField(default=1)
-
-    def specific_entry(self):
-        """Return the instance for the specific entry for this Entry."""
-        # Look for the EntryMixin
-        for cls in EntryMixin.__subclasses__():
-            try:
-                return cls.get(cls.entry == self)
-            except DoesNotExist:
-                continue
 
     def __unicode__(self):
         return "entry ({})".format(self.name)
-
-
-class EntryMixin(BaseModel):
-    entry = ForeignKeyField(Entry)
-
-    def specific_entry(self):
-        """Return this instance."""
-        return self
-
-    def __unicode__(self):
-        return "{} ({})".format(self.entry_type(), self.name)
-
-    """Delegate Entry property access to the entry field instance."""
-    def getName(self):
-        return self.entry.name
-
-    def setName(self, name):
-        self.entry.name = name
-
-    name = property(getName, setName)
-
-    def getDescription(self):
-        return self.entry.description
-
-    def setDescription(self, description):
-        self.entry.description = description
-
-    description = property(getDescription, setDescription)
-
-    def getCreated_At(self):
-        return self.entry.created_at
-
-    def setCreated_At(self, created_at):
-        self.entry.created_at = created_at
-
-    created_at = property(getCreated_At, setCreated_At)
-
-    def getAuthor(self):
-        return self.entry.author
-
-    def setAuthor(self, author):
-        self.entry.author = author
-
-    author = property(getAuthor, setAuthor)
-
-    def getVersion(self):
-        return self.entry.version
-
-    def setVersion(self, version):
-        self.entry.version = version
-
-    version = property(getVersion, setVersion)
-
-    def getDependencies(self):
-        return self.entry.dependencies
-
-    def setDependencies(self, dependencies):
-        self.entry.dependencies = dependencies
-
-    dependencies = property(getDependencies, setDependencies)
 
 
 class License(BaseModel):
@@ -150,13 +81,12 @@ class Dependency(BaseModel):
     name = CharField(null=True)
     version = CharField(null=True)
     path = CharField(null=True)
-    entry = ForeignKeyField(Entry, related_name="dependencies")
 
     def __unicode__(self):
         return "({}) {}".format(self.type, self.name if self.name else self.path)
 
 
-class Problem(EntryMixin):
+class Problem(Entry):
     """A problem to be solved.
 
     Requires nothing extra over Entry.
@@ -183,16 +113,24 @@ class Source(BaseModel):
         return "source ({}, {})".format(self.type, self.url)
 
 
-class Toolbox(EntryMixin):
+class Toolbox(Entry):
     homepage = CharField(null=True)
     license = ForeignKeyField(License, related_name="toolboxes")
     source = ForeignKeyField(Source, related_name="toolboxes")
 
 
-class Solution(EntryMixin):
+class ToolboxDependency(Dependency):
+    entry = ForeignKeyField(Toolbox, related_name='dependencies')
+
+
+class Solution(Entry):
     problem = ForeignKeyField(Problem, related_name="solutions")
     toolbox = ForeignKeyField(Toolbox, related_name="solutions")
     template = TextField()
+
+
+class SolutionDependency(Dependency):
+    entry = ForeignKeyField(Solution, related_name='dependencies')
 
 
 class Var(BaseModel):
@@ -224,34 +162,50 @@ class Var(BaseModel):
         return "var {} ({})".format(self.name, self.type)
 
 
-class TextContent(FTSModel):
-    """Store text content from other entries for searching."""
+class BaseIndexModel(FTSModel):
     name = TextField()
     description = TextField()
-    entry = ForeignKeyField(Entry)
 
     class Meta:
         database = db
 
-    def add_entry(entry):
-        """Add the text index for entry."""
-        TextContent.create(
-            name=entry.name,
-            description=entry.description,
-            entry=entry
-        )
+
+class ProblemIndex(BaseIndexModel):
+    """Store text content from other entries for searching."""
+    problem = ForeignKeyField(Problem)
 
 
-_TABLES = [User, Entry, License, Dependency, Problem, Toolbox, Solution, Var,
-           Source]
+class SolutionIndex(BaseIndexModel):
+    """Store text content from other entries for searching."""
+    solution = ForeignKeyField(Solution)
 
+
+class ToolboxIndex(BaseIndexModel):
+    """Store text content from other entries for searching."""
+    toolbox = ForeignKeyField(Toolbox)
+
+
+def index_entry(entry):
+    """Add entry to the appropriate text index."""
+    entry_type = type(entry).__name__
+    cls = getattr(importlib.import_module(__name__),
+                  entry_type + 'Index')
+    if cls:
+        obj = cls(name=entry.name, description=entry.description)
+        field = entry_type[0].lower() + entry_type[1:]
+        setattr(obj, field, entry)
+        obj.save()
+
+
+_TABLES = [User, License, Problem, Toolbox, ToolboxDependency, Solution, SolutionDependency, Var, Source]
+_INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 
 def create_database(db, safe=True):
     """Create the database for our models."""
     db.create_tables(_TABLES, safe=safe)
-    TextContent.create_table()
+    db.create_tables(_INDEX_TABLES, safe=safe)
 
 def drop_tables(db):
     """Drop the model tables."""
+    db.drop_tables(_INDEX_TABLES, safe=True)
     db.drop_tables(_TABLES, safe=True)
-    TextContent.drop_table(fail_silently=True)

@@ -1,7 +1,7 @@
 # coding: utf-8
 
 from app import db
-from models import User, Entry, Problem, Solution, Toolbox, Var, Source, Dependency, License, TextContent, create_database, drop_tables
+from models import User, Problem, Solution, Toolbox, Var, Source, ToolboxDependency, SolutionDependency, License, create_database, drop_tables, index_entry
 
 
 def bootstrap():
@@ -11,24 +11,17 @@ def bootstrap():
 
     user = User.create(name="Fred", email="fred@example.org")
 
-    anuga_entry = Entry.create(
+    anuga_problem = Problem.create(
         name="Regional Inundation modelling (storm-surge or tsunamis)",
         description="Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
         author=user
     )
+    index_entry(anuga_problem)
 
-    TextContent.add_entry(anuga_entry)
-
-    anuga_problem = Problem.create(entry=anuga_entry)
-
-    anuga_entry = Entry.create(
+    anuga_toolbox = Toolbox.create(
         name="ANUGA",
         description="ANUGA is a tool which can simulate events and their effects as they ‘progress’ or travel through a scenario in a model. You can model the ‘wave’ or storm surge to measure the impact and risk for known locations.",
-        author=user
-    )
-    TextContent.add_entry(anuga_entry)
-    anuga_toolbox = Toolbox.create(
-        entry=anuga_entry,
+        author=user,
         homepage="https://anuga.anu.edu.au",
         license=License.create(url="https://anuga.anu.edu.au/svn/anuga/trunk/anuga_core/source/anuga/LICENSE.txt"),
         source=Source.create(
@@ -36,17 +29,13 @@ def bootstrap():
             url="https://anuga.anu.edu.au/svn/anuga/trunk/anuga_core/"
         )
     )
+    ToolboxDependency.create(type="python", path="requirements.txt", entry=anuga_toolbox)
+    index_entry(anuga_toolbox)
 
-    Dependency.create(type="python", path="requirements.txt", entry=anuga_entry)
-
-    anuga_entry = Entry.create(
+    anuga_solution = Solution.create(
         name="ANUGA Busselton example",
         description="This template contains a pre-canned event (a wave) entering on the WEST of the grid, heading east, designed for coastal simulations of the Busselton-Bunbury area.\n\nThe implemented solver (Parallel finite volume method for hydrodynamic inundation modelling) is [described here](http://journal.austms.org.au/ojs/index.php/ANZIAMJ/article/view/153/)\n\nAn overview of the solver is [available here](http://www.ga.gov.au/corporate_data/69370/Rec2009_036.pdf).\n\nInputs:\n\nThe template can be customised in a variety of ways \n\n\tXxxx\n\n\tYyyy\n\n\tZzzz\n\nAnd is paired with a DEM of the area in question.\n\n\n\nOutputs:\n\n\tScreenshots of xxx\n\n\tCustom ANUGA SSW (database) of the simulation",
-        author=user
-    )
-    TextContent.add_entry(anuga_entry)    
-    anuga_solution = Solution.create(
-        entry=anuga_entry,
+        author=user,
         problem=anuga_problem,
         toolbox=anuga_toolbox,
         homepage="https://github.com/GeoscienceAustralia/tcrm",
@@ -74,17 +63,19 @@ def bootstrap():
                default="busselton",
                solution=anuga_solution)
 
-    tcrm_entry = Entry.create(name="Understanding cyclone risk",
-                              description="Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
-                              author=user)
-    tcrm_prob = Problem.create(entry=tcrm_entry)
-    TextContent.add_entry(tcrm_entry)
-    tcrm_entry = Entry.create(name="Tropical Cyclone Risk Model",
-                              description="The Tropical Cyclone Risk Model is a stochastic tropical cyclone model developed by [Geoscience Australia](http://www.ga.gov.au) for estimating the wind hazard from tropical cyclones.",
-                              author=user)
-    TextContent.add_entry(tcrm_entry)    
+    index_entry(anuga_solution)
+
+    tcrm_problem = Problem.create(
+        name="Understanding cyclone risk",
+        description="Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
+        author=user
+    )
+    index_entry(tcrm_problem)
+
     tcrm_toolbox = Toolbox.create(
-        entry=tcrm_entry,
+        name="Tropical Cyclone Risk Model",
+        description="The Tropical Cyclone Risk Model is a stochastic tropical cyclone model developed by [Geoscience Australia](http://www.ga.gov.au) for estimating the wind hazard from tropical cyclones.",
+        author=user,
         homepage="https://github.com/GeoscienceAustralia/tcrm",
         license=License.create(url="https://github.com/GeoscienceAustralia/tcrm/blob/master/LICENSE"),
         source=Source.create(type="git",
@@ -92,14 +83,14 @@ def bootstrap():
                          checkout="v1.0rc1",
                          exec="python installer/setup.py build_ext -i")
     )
+    ToolboxDependency.create(type="system", name="tk-devel", entry=tcrm_toolbox)
+    ToolboxDependency.create(type="system", name="tkinter", entry=tcrm_toolbox)
+    ToolboxDependency.create(type="system", name="geos-devel", entry=tcrm_toolbox)
+    ToolboxDependency.create(type="system", name="hdf5-devel", entry=tcrm_toolbox)
+    ToolboxDependency.create(type="python", path="requirements.txt", entry=tcrm_toolbox)
+    index_entry(tcrm_toolbox)
 
-    Dependency.create(type="system", name="tk-devel", entry=tcrm_entry)
-    Dependency.create(type="system", name="tkinter", entry=tcrm_entry)
-    Dependency.create(type="system", name="geos-devel", entry=tcrm_entry)
-    Dependency.create(type="system", name="hdf5-devel", entry=tcrm_entry)
-    Dependency.create(type="python", path="requirements.txt", entry=tcrm_entry)
-
-    tcrm_entry = Entry.create(
+    tcrm_solution = Solution.create(
         name="TCRM example",
         description="""The template allows for numerous fake events (generated from real events) to occur on a target area, allowing us to compute statistics about the likelihood, size, and patterns arising from generating thousands of years worth of events.
 
@@ -113,13 +104,9 @@ Outputs:
 	Track files for each cyclone
 
 	Statistics about risk areas""",
-        author=user
-    )
-    TextContent.add_entry(tcrm_entry)
-    tcrm_solution = Solution.create(
-        entry=tcrm_entry,
+        author=user,
         homepage="https://github.com/GeoscienceAustralia/tcrm",
-        problem=tcrm_prob,
+        problem=tcrm_problem,
         toolbox=tcrm_toolbox,
         template="import glob\nimport os\nimport subprocess\nimport tempfile\nimport zipfile\n\nTCRM_DIR=\"/opt/tcrm\"\n\niniString = \"\"\"\n[Actions]\n; TCRM modules to execute\nDataProcess=True\nExecuteStat=True\nExecuteTrackGenerator=True\nExecuteWindfield=True\nExecuteHazard=True\nPlotHazard=True\nPlotData=False\nExecuteEvaluate=False\nDownloadData=True\n\n[DataProcess]\nInputFile=Allstorms.ibtracs_wmo.v03r05.csv\nSource=IBTRACS\nStartSeason=1981\nFilterSeasons=True\n\n[Region]\n; Domain for windfield and hazard calculation\ngridLimit={'xMin':${west-bound-lon},'xMax':${east-bound-lon},'yMin':${south-bound-lat},'yMax':${north-bound-lat}}\ngridSpace={'x':1.0,'y':1.0}\ngridInc={'x':1.0,'y':0.5}\npLocalityID=${locality-id}\nLocalityName=${locality-name}\n\n[StatInterface]\nkdeType=Biweight\nkde2DType=Gaussian\nkdeStep=0.2\n\n[TrackGenerator]\n; NumSimulations=1000\nNumSimulations=${num-simulations}\n; YearsPerSimulation=1\nYearsPerSimulation=${years-per-simulation}\nSeasonSeed=${season-seed}\nTrackSeed=${track-seed}\n;SeasonSeed=403943\n;TrackSeed=89333\n\n[WindfieldInterface]\n;TrackPath=./output/vl/tracks\nMargin=2.0\nResolution=${windfield-interface-resolution}\n;Resolution=0.05\nSource=TCRM\nprofileType=powell\nwindFieldType=kepert\n\n[Hazard]\n; Years to calculate return period wind speeds\n;InputPath=./output/vl/windfield\n;Resolution=0.05\nYears=5,10,20,25,50,100,200,250,500,1000,2000,2500\nMinimumRecords=10\nCalculateCI=False\n\n\n[Input]\nlandmask = input/landmask.nc\nmslpfile = MSLP/slp.day.ltm.nc\ndatasets = IBTRACS,LTMSLP\nMSLPGrid=1,2,3,4,12\n\n[Output]\nPath=./output/vl\n\n[Logging]\nLogFile=./output/vl/log/tcrm.log\nLogLevel=INFO\nVerbose=False\n\n[Process]\nExcludePastProcessed=True\nDatFile=./output/vl/process/dat/tcrm.dat\n\n[RMW]\nGetRMWDistFromInputData=False\nmean=50.0\nsigma=0.6\n\n[TCRM]\n; Output track files settings\nColumns=index,age,lon,lat,speed,bearing,pressure,penv,rmax\nFieldDelimiter=,\nNumberOfHeadingLines=1\nSpeedUnits=kph\nPressureUnits=hPa\n\n[IBTRACS]\n; Input data file settings\nurl = ftp://eclipse.ncdc.noaa.gov/pub/ibtracs/v03r05/wmo/csv/Allstorms.ibtracs_wmo.v03r05.csv.gz\npath = input\nfilename = Allstorms.ibtracs_wmo.v03r05.csv\ncolumns = tcserialno,season,num,skip,skip,skip,date,skip,lat,lon,skip,pressure\nfielddelimiter = ,\nnumberofheadinglines = 3\npressureunits = hPa\nlengthunits = km\ndateformat = %Y-%m-%d %H:%M:%S\nspeedunits = kph\n\n[LTMSLP]\n; MSLP climatology file settings\nURL = ftp://ftp.cdc.noaa.gov/Datasets/ncep.reanalysis.derived/surface/slp.day.1981-2010.ltm.nc\npath = MSLP\nfilename = slp.day.ltm.nc\n\"\"\"\n\ndef cloudUpload(inFilePath, cloudKey):\n    \"\"\"Upload inFilePath to cloud bucket with key cloudKey.\"\"\"\n    cloudBucket = os.environ[\"STORAGE_BUCKET\"]\n    cloudDir = os.environ[\"STORAGE_BASE_KEY_PATH\"]\n    queryPath = (cloudBucket + \"/\" + cloudDir + \"/\" + cloudKey).replace(\"//\", \"/\")\n    retcode = subprocess.call([\"cloud\", \"upload\", cloudKey, inFilePath, \"--set-acl=public-read\"])\n    print (\"cloudUpload: \" + inFilePath + \" to \" + queryPath + \" returned \" + str(retcode))\n\ndef cloudDownload(cloudKey, outFilePath):\n    \"\"\"Downloads the specified key from bucket and writes it to outfile.\"\"\"\n    cloudBucket = os.environ[\"STORAGE_BUCKET\"]\n    cloudDir = os.environ[\"STORAGE_BASE_KEY_PATH\"]\n    queryPath = (cloudBucket + \"/\" + cloudDir + \"/\" + cloudKey).replace(\"//\", \"/\")\n    retcode = subprocess.call([\"cloud\", \"download\",cloudBucket,cloudDir,cloudKey, outFilePath])\n    print \"cloudDownload: \" + queryPath + \" to \" + outFilePath + \" returned \" + str(retcode)\n\n# Write the config file\nini_file = tempfile.NamedTemporaryFile(mode='w',\n                                       suffix=\".ini\",\n                                       prefix=\"vhirl-tcrm\",\n                                       delete=False)\nwith ini_file as f:\n    f.write(iniString)\n\n# Execute TCRM job\nprint \"Executing TCRM in {0}\".format(TCRM_DIR)\nos.chdir(TCRM_DIR)\nsubprocess.call([\"mpirun\", \"-np\", \"${n-threads}\", \"/usr/bin/python\", \"tcrm.py\", \"-c\", ini_file.name])\n\n\n# Upload results\ndef upload_results(spec, keyfn=None):\n    \"\"\"Upload files specified by spec.\n\n    Spec will be passed to glob.glob to find files.  If keyfn is\n    supplied it should be a function that takes a filename from glob\n    and returns the corresponding cloud key to use.\n\n    \"\"\"\n    files = glob.glob(spec)\n    for f in files:\n        k = None\n        if keyfn:\n            k = keyfn(f)\n        if k is None:\n            k = f\n        cloudUpload(f, k)\n\n\n# Zip then upload results\ndef zip_upload_results(spec, name, key=None):\n    \"\"\"Zip files globbed from spec into zipfile name and upload under key.\n\n    If key is None it will default to <name>.zip.\n\n    \"\"\"\n    z = zipfile.ZipFile(name, 'w')\n    for f in glob.glob(spec):\n        z.write(f)\n    z.close()\n    cloudUpload(name, name if key is None else key)\n\n\n# Logs\nupload_results(\"output/vl/log/*\")\n# Track files\nzip_upload_results(\"output/vl/tracks/*.csv\", \"tracks.zip\")\n# Windfield files\nzip_upload_results(\"output/vl/windfield/*.nc\", \"windfields.zip\")\n# Hazard data and plots\nupload_results(\"output/vl/plots/hazard/*.png\")\nupload_results(\"output/vl/hazard/*.nc\")"
     )
@@ -201,3 +188,5 @@ Outputs:
         type="int",
         min=1,
         solution=tcrm_solution)
+
+    index_entry(tcrm_solution)
