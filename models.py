@@ -1,7 +1,6 @@
 import datetime
 # from mongoengine import *
 from peewee import *
-from flask_peewee.utils import get_dictionary_from_model
 from playhouse.sqlite_ext import FTSModel
 from app import db
 
@@ -21,17 +20,6 @@ VARIABLE_TYPES = (('int', 'Integer'),
                   ('random-int', 'Random Integer'))
 
 
-def to_dict(entry):
-    print("to_dict({})".format(entry))
-    d = get_dictionary_from_model(entry, fields={
-        Entry: ['id', 'name', 'description', 'author', 'version', 'created_at']
-    })
-    print("to_dict({})".format(d))
-    if 'type' not in d:
-        d['type'] = entry.entry_type()
-    return d
-
-
 def text_search(text):
     """Search for entries that match text.
 
@@ -42,40 +30,9 @@ def text_search(text):
     return TextContent.select().where(TextContent.match(text))
 
 
-# def pymongo_find(query):
-#     """Performs a find(query) using the PyMongo connection directly.
-
-#     Wraps the dict results in model instances before returning them.
-
-#     """
-#     results = Entry._get_collection().find(query, fields="_id")
-#     if results:
-#         return Entry.objects(id__in=[result['_id'] for result in results])
-
-
 class BaseModel(Model):
     class Meta:
         database = db
-
-    def to_dict(self, reverse_rels=False):
-        j = dict()
-
-        def f(k):
-            v = getattr(self, k)
-            if isinstance(v, BaseModel):
-                v = v.to_dict(reverse_rels)
-            elif isinstance(v, SelectQuery):
-                v = [x.to_dict(reverse_rels) for x in v]
-            j[k] = v
-
-        for k in self._meta.fields:
-            f(k)
-        if reverse_rels:
-            for k in self._meta.reverse_rel:
-                f(k)
-        if 'type' not in j:
-            j['type'] = self.entry_type()
-        return j
 
     def entry_type(self):
         return type(self).__name__
@@ -121,15 +78,6 @@ class Entry(BaseModel):
 
 class EntryMixin(BaseModel):
     entry = ForeignKeyField(Entry)
-
-    def to_dict(self, reverse_rels=False):
-        d = super().to_dict(reverse_rels)
-        for x in ['name', 'description', 'author', 'version', 'created_at',
-                  'dependencies']:
-            if x in d['entry']:
-                d[x] = d['entry'][x]
-        del d['entry']
-        return d
 
     def specific_entry(self):
         """Return this instance."""

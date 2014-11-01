@@ -3,12 +3,9 @@ from flask import (Blueprint, request, render_template, url_for, jsonify,
 from flask.views import MethodView
 from markdown import markdown
 from app import app
-from models import Toolbox, Entry, Problem, Solution, text_search, User, to_dict, Var, Dependency
+from models import Toolbox, Entry, Problem, Solution, text_search, User, Var, Dependency
 from werkzeug.exceptions import NotAcceptable
 from peewee import SelectQuery
-from flask_peewee.utils import get_dictionary_from_model
-# from bson import ObjectId
-# from mongoengine import QuerySet, EmbeddedDocument
 
 site = Blueprint('site', __name__, template_folder='templates')
 
@@ -127,6 +124,42 @@ def for_api(entry, fields=None, exclude=None):
     return _fixup(entry, fields, exclude)
 
 
+def properties(obj, props):
+    """Return a dict with entries from obj.
+
+    Each entry of props can be a string property name, in which case
+    that property of obj will be copied under a key of the same name
+    on the new dict. If a 2-tuple (src_name, dest_name) is passed,
+    then new_dict[dest_name] will get the value of obj.src_name. In
+    any case, if a source property name contains '.' it will be
+    interpreted as a series of property requests on
+    obj. E.g. 'foo.bar' will result in the value of obj.foo.bar.
+
+    If a source property is not present on obj, it will be ignored.
+
+    obj -- Object instance to retrieve properties from
+    props -- List of property names or (source, dest) names tuples
+
+    """
+    d = {}
+    for p in props:
+        if isinstance(p, tuple):
+            srcp, destp = p
+        else:
+            srcp = p
+            destp = p
+        ps = srcp.split('.')
+        val = obj
+        try:
+            for prop in ps:
+                val = getattr(val, prop)
+            if val is not None:
+                d[destp] = val
+        except:
+            pass
+    return d
+
+
 class EntryView(MethodView):
     list_keys = ['_id', 'name', 'description',
                  'homepage', 'license', 'metadata']
@@ -163,7 +196,9 @@ class EntryView(MethodView):
         return Entry.get(Entry.id == entry_id)
 
     def for_api(self, entry):
-        return for_api(entry)
+        d = properties(entry, ['id', 'name', 'description', 'created_at',
+                               'version', ('author.name', 'author')])
+        return d
 
 
 class ProblemView(EntryView):
@@ -171,6 +206,11 @@ class ProblemView(EntryView):
 
     def query(self, entry_id):
         return Problem.get(Problem.id == entry_id)
+
+    def for_api(self, entry):
+        d = super().for_api(entry.entry)
+        d.update({'id': entry.id, '@id': entry_url(entry)})
+        return d
 
 
 class SolutionView(EntryView):
@@ -180,12 +220,23 @@ class SolutionView(EntryView):
         return Solution.get(Solution.id == entry_id)
 
     def for_api(self, entry):
-        return for_api(entry, fields={
-            Entry: ['id', 'name', 'description', 'author', 'created_at', 'version'],
-            Problem: ['id', 'name', 'description'],
-            Toolbox: ['id', 'name', 'description'],
-            Var: ['name', 'type', 'label', 'min', 'max', 'step', 'optional', 'default']
+        d = super().for_api(entry.entry)
+        problem = properties(entry.problem, ['name', 'description'])
+        problem.update({'@id': entry_url(entry.problem)})
+        toolbox = properties(entry.toolbox, ['name', 'description'])
+        toolbox.update({'@id': entry_url(entry.toolbox)})
+        d.update({
+            'id': entry.id,
+            '@id': entry_url(entry),
+            'problem': problem,
+            'toolbox': toolbox,
+            'template': entry.template,
+            'variables': [properties(v, ['name', 'type', 'label', 'description',
+                                         'optional', 'default', 'min', 'max',
+                                         'step', 'values'])
+                          for v in entry.variables]
         })
+        return d
 
 
 class ToolboxView(EntryView):
@@ -195,10 +246,18 @@ class ToolboxView(EntryView):
         return Toolbox.get(Toolbox.id == entry_id)
 
     def for_api(self, entry):
-        return for_api(entry, fields={
-            Entry: ['id', 'name', 'description', 'author', 'created_at', 'version'],
-            Dependency: Dependency._meta.get_field_names()
+        d = super().for_api(entry.entry)
+        d.update(properties(entry, ['id', 'homepage']))
+        d.update({
+            'id': entry.id,
+            '@id': entry_url(entry),
+            'homepage': entry.homepage,
+            'license': properties(entry.license, ['name', 'url']),
+            'source': properties(entry.source, ['type', 'url', 'checkout',
+                                                'exec'])
         })
+        return d
+
 
 class UserView(MethodView):
     def get(self, entry_id):
@@ -213,7 +272,7 @@ class UserView(MethodView):
 
 class EntriesView(MethodView):
     model = Entry
-    fields = { Entry: ['id', 'name', 'description'] }
+    entry_type = 'entry'
 
     """Handle all entries."""
     def get(self, format=None):
@@ -258,47 +317,74 @@ class EntriesView(MethodView):
         return Entry.select()
 
     def for_api(self, entries):
-        # Strip out extra details
-        return dict(entries=[get_dictionary_from_model(e, fields=self.fields)
-                             for e in entries])
+        # Return a dict with entries list
+        return {pluralise(self.entry_type): [self.listing(e) for e in entries]}
+
+    def listing(self, entry):
+        # Return a dict view of entry
+        d = properties(entry, ['id', 'name', 'description', 'version',
+                               'created_at', ('author.name', 'author')])
+        d['type'] = self.entry_type
+        return d
 
 
 class ProblemsView(EntriesView):
     model = Problem
+    entry_type = 'problem'
 
     def query(self):
         return Problem.select()
 
+    def listing(self, entry):
+        d = super().listing(entry.entry)
+        d.update({
+            'id': entry.id,
+            '@id': entry_url(entry),
+            'type': 'problem'
+        })
+        return d
+
 
 class ToolboxesView(EntriesView):
     model = Toolbox
+    entry_type = 'toolbox'
 
     def query(self):
         return Toolbox.select()
 
+    def listing(self, entry):
+        d = super().listing(entry.entry)
+        d.update({
+            'id': entry.id,
+            '@id': entry_url(entry),
+            'type': 'toolbox'
+        })
+        return d
+
 
 class SolutionsView(EntriesView):
     model = Solution
-    fields = {
-        Entry: ['name', 'description', 'author', 'created_at', 'version'],
-        Solution: ['entry', 'problem', 'toolbox'],
-        Problem: ['id', 'entry'],
-        Toolbox: ['id', 'entry']
-    }
+    entry_type = 'solution'
 
     def query(self):
         solutions = Solution.select()
         return solutions
 
-    # def for_api(self, entries):
-    #     # Strip unwanted keys
-    #     entries = super().for_api(entries)
-        # # Reduce problem/toolbox to references
-        # keep = ['@id', 'name', 'description']
-        # for entry in entries['entries']:
-        #     entry['problem'] = _keep_keys(entry['problem'], keep)
-        #     entry['toolbox'] = _keep_keys(entry['toolbox'], keep)
-        # return entries
+    def listing(self, entry):
+        problem = properties(entry.problem, ['name', 'description'])
+        problem.update({'@id': entry_url(entry.problem)})
+        toolbox = properties(entry.toolbox, ['name', 'description'])
+        toolbox.update({'@id': entry_url(entry.toolbox)})
+        d = super().listing(entry.entry)
+        d.update({
+            'id': entry.id,
+            '@id': entry_url(entry),
+            'problem': problem,
+            'toolbox': toolbox,
+            'type': 'solution'
+        })
+        return d
+
 
 # Dispatch to json/html views
 site.add_url_rule('/toolboxes',
