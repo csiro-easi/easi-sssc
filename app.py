@@ -12,7 +12,7 @@ app.config['CORS_HEADERS'] = ['Content-Type', 'X-Requested-With']
 cors = CORS(app)
 
 # Connect to the database now to catch any errors here
-db = SqliteExtDatabase('scm.db')
+db = SqliteExtDatabase(app.config['SQLITE_DB_FILE'])
 
 
 @app.before_first_request
