@@ -330,7 +330,6 @@ def search():
 
 @site.route('/')
 def index():
-    print("Index!")
     return render_template('index.html')
 
 
