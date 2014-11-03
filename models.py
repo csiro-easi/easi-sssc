@@ -1,8 +1,8 @@
-import datetime
-# from mongoengine import *
+from flask import json
 from peewee import *
 from playhouse.sqlite_ext import FTSModel
 from app import db
+import datetime
 import importlib
 
 
@@ -133,6 +133,19 @@ class SolutionDependency(Dependency):
     entry = ForeignKeyField(Solution, related_name='dependencies')
 
 
+class ValuesField(TextField):
+    """Store variable values list as a json string."""
+    def db_value(self, value):
+        """Return database value from values list."""
+        if value is not None:
+            return json.dumps(value)
+
+    def python_value(self, value):
+        """Return python values list from json string in the db."""
+        if value is not None:
+            return json.loads(value)
+
+
 class Var(BaseModel):
     """Variable in a Solution template.
 
@@ -155,7 +168,7 @@ class Var(BaseModel):
     min = DoubleField(null=True)
     max = DoubleField(null=True)
     step = DoubleField(null=True)
-    values = CharField(null=True)
+    values = ValuesField(null=True)
     solution = ForeignKeyField(Solution, related_name="variables")
 
     def __unicode__(self):
