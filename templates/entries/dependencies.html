@@ -1,0 +1,16 @@
+{% if entry.dependencies %}
+<div class="panel panel-default">
+  <div class="panel-heading"><h2 class="panel-title">Dependencies</h2></div>
+  <div class="panel-body">
+    <ul>
+      {% for d in entry.dependencies %}
+      {% if d.type == 'python' %}
+      <li class="dep-python">{{ d.name or d.path }}{% if d.version %} ({{ d.version }}){% endif %}</li>
+      {% else %}
+      <li class="dep-system">{{ d.name }}{% if d.version %} ({{ d.version }}){% endif %}</li>
+      {% endif %}
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}

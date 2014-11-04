@@ -2,6 +2,36 @@
 
 {% block details %}
 
+<div class="row">
+  <div class="col-md-6">
+    <div class="panel panel-default">
+      <div class="panel-heading"><h2 class="panel-title">Source</h2></div>
+      <div class="panel-body">
+        {% with %}
+        {% set source = entry.source %}
+        <dl>
+          <dt>Repository URL ({{ source.type }})</dt>
+          <dd>{{ source.url }}</dd>
+
+          {% if source.checkout %}
+          <dt>Checkout target</dt>
+          <dd>{{ source.checkout }}</dd>
+          {% endif %}
+
+          {% if source.exec %}
+          <dt>Execute</dt>
+          <dd><code>{{ source.exec }}</code></dd>
+          {% endif %}
+        </dl>
+        {% endwith %}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    {% include 'entries/dependencies.html' %}
+  </div>
+</div>
+
 <div class="panel panel-default">
   <div class="panel-heading"><h2 class="panel-title">Dependent solutions</h2></div>
   <div class="panel-body">
