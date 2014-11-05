@@ -127,9 +127,9 @@ class EntryView(MethodView):
         d = properties(entry, ['id', 'name', 'description', 'created_at',
                                'version', ('author.name', 'author')])
         d['@id'] = entry_url(entry)
-        if entry.dependencies:
+        if type(entry.dependencies) == list:
             d['dependencies'] = [properties(dep, ['type', 'name', 'version',
-                                                'path'])
+                                                  'path'])
                                  for dep in entry.dependencies]
         return d
 
