@@ -1,7 +1,7 @@
 from app import app
 from flask.ext.admin import Admin
 from flask.ext.admin.contrib.peewee import ModelView
-from models import User, Problem, Solution, Toolbox, Image, ToolboxImage, SolutionImage, Dependency, SolutionDependency, ToolboxDependency
+from models import User, Problem, Solution, Toolbox, Image, ToolboxImage, SolutionImage, Dependency, SolutionDependency, ToolboxDependency, Var
 
 admin = Admin(app)
 
@@ -16,7 +16,7 @@ class ProblemAdmin(ModelView):
 
 
 class SolutionAdmin(ModelView):
-    inline_models = (SolutionDependency, SolutionImage)
+    inline_models = (SolutionDependency, SolutionImage, Var)
 
 
 class ToolboxAdmin(ModelView):

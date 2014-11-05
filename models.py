@@ -148,15 +148,15 @@ class SolutionImage(Image):
     sc_path = CharField(null=True)
 
 
-class ValuesField(TextField):
-    """Store variable values list as a json string."""
+class JsonField(CharField):
+    """Store JSON strings."""
     def db_value(self, value):
-        """Return database value from values list."""
+        """Return database value from python data structure."""
         if value is not None:
             return json.dumps(value)
 
     def python_value(self, value):
-        """Return python values list from json string in the db."""
+        """Return python data structure from json string in the db."""
         if value is not None:
             return json.loads(value)
 
@@ -183,11 +183,20 @@ class Var(BaseModel):
     min = DoubleField(null=True)
     max = DoubleField(null=True)
     step = DoubleField(null=True)
-    values = ValuesField(null=True)
     solution = ForeignKeyField(Solution, related_name="variables")
 
     def __unicode__(self):
         return "var {} ({})".format(self.name, self.type)
+
+
+class VarValue(BaseModel):
+    """Valid values for a variable.
+
+    Values are serialized as json strings in the database.
+
+    """
+    var = ForeignKeyField(Var, related_name='values')
+    value = JsonField()
 
 
 class BaseIndexModel(FTSModel):
@@ -226,7 +235,8 @@ def index_entry(entry):
 
 
 _TABLES = [User, License, Problem, Toolbox, ToolboxDependency, Solution,
-           SolutionDependency, Var, Source, ToolboxImage, SolutionImage]
+           SolutionDependency, Var, VarValue, Source, ToolboxImage,
+           SolutionImage]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 
 

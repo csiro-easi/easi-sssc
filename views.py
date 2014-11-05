@@ -80,7 +80,12 @@ def properties(obj, props):
         val = obj
         try:
             for prop in ps:
-                val = getattr(val, prop)
+                if isinstance(val, list):
+                    val = [getattr(v, prop) for v in val]
+                else:
+                    val = getattr(val, prop)
+                if isinstance(val, SelectQuery):
+                    val = [v for v in val]
             if val is not None:
                 d[destp] = val
         except:
@@ -180,7 +185,9 @@ class ToolboxView(EntryView):
             'homepage': entry.homepage,
             'license': properties(entry.license, ['name', 'url']),
             'source': properties(entry.source, ['type', 'url', 'checkout',
-                                                'exec'])
+                                                'exec']),
+            'images': [properties(img, ['provider', 'image_id', 'sc_path'])
+                       for img in entry.images]
         })
         return d
 
