@@ -6,7 +6,7 @@ Flask-WTF==0.10.2
 Jinja2==2.7.3
 Markdown==2.5.1
 MarkupSafe==0.23
-WTForms==2.0.1
+WTForms==1.0.5
 Werkzeug==0.9.6
 aniso8601==0.83
 flake8==2.2.3

@@ -123,6 +123,16 @@ class ToolboxDependency(Dependency):
     entry = ForeignKeyField(Toolbox, related_name='dependencies')
 
 
+class Image(BaseModel):
+    provider = CharField()
+    image_id = CharField()
+
+
+class ToolboxImage(Image):
+    toolbox = ForeignKeyField(Toolbox, related_name='images')
+    sc_path = CharField(null=True)
+
+
 class Solution(Entry):
     problem = ForeignKeyField(Problem, related_name="solutions")
     toolbox = ForeignKeyField(Toolbox, related_name="solutions")
@@ -131,6 +141,11 @@ class Solution(Entry):
 
 class SolutionDependency(Dependency):
     entry = ForeignKeyField(Solution, related_name='dependencies')
+
+
+class SolutionImage(Image):
+    solution = ForeignKeyField(Solution, related_name='images')
+    sc_path = CharField(null=True)
 
 
 class ValuesField(TextField):
@@ -210,13 +225,16 @@ def index_entry(entry):
         obj.save()
 
 
-_TABLES = [User, License, Problem, Toolbox, ToolboxDependency, Solution, SolutionDependency, Var, Source]
+_TABLES = [User, License, Problem, Toolbox, ToolboxDependency, Solution,
+           SolutionDependency, Var, Source, ToolboxImage, SolutionImage]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
+
 
 def create_database(db, safe=True):
     """Create the database for our models."""
     db.create_tables(_TABLES, safe=safe)
     db.create_tables(_INDEX_TABLES, safe=safe)
+
 
 def drop_tables(db):
     """Drop the model tables."""

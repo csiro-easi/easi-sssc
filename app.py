@@ -12,8 +12,9 @@ app.config['CORS_HEADERS'] = ['Content-Type', 'X-Requested-With']
 cors = CORS(app)
 
 # Connect to the database now to catch any errors here
-db = SqliteExtDatabase(app.config['SQLITE_DB_FILE'])
-
+db = SqliteExtDatabase(app.config['SQLITE_DB_FILE'],
+                       threadlocals=True)
+#                       journal_mode='WAL')
 
 @app.before_first_request
 def first_setup():

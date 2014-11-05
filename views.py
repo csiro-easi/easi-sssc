@@ -159,8 +159,9 @@ class SolutionView(EntryView):
             'problem': problem,
             'toolbox': toolbox,
             'template': entry.template,
-            'variables': [properties(v, ['name', 'type', 'label', 'description',
-                                         'optional', 'default', 'min', 'max',
+            'variables': [properties(v, ['name', 'type', 'label',
+                                         'description', 'optional',
+                                         'default', 'min', 'max',
                                          'step', 'values'])
                           for v in entry.variables]
         })
