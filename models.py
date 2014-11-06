@@ -179,7 +179,7 @@ class Var(BaseModel):
     label = CharField(null=True)
     description = TextField(null=True)
     optional = BooleanField(default=False)
-    default = CharField(null=True)
+    default = JsonField(null=True)
     min = DoubleField(null=True)
     max = DoubleField(null=True)
     step = DoubleField(null=True)
