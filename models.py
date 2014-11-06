@@ -18,7 +18,8 @@ DEPENDENCY_TYPES = (('system', 'System package'),
 VARIABLE_TYPES = (('int', 'Integer'),
                   ('double', 'Floating point'),
                   ('string', 'String'),
-                  ('random-int', 'Random Integer'))
+                  ('random-int', 'Random Integer'),
+                  ('file', 'Input dataset'))
 
 
 def text_search(text):

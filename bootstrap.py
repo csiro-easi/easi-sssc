@@ -63,6 +63,11 @@ def bootstrap():
                default="busselton",
                solution=anuga_solution)
 
+    Var.create(type="file",
+               name="input_dataset",
+               label="Input dataset (NetCDF)",
+               solution=anuga_solution)
+    
     index_entry(anuga_solution)
 
     tcrm_problem = Problem.create(
