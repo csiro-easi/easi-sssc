@@ -183,20 +183,11 @@ class Var(BaseModel):
     min = DoubleField(null=True)
     max = DoubleField(null=True)
     step = DoubleField(null=True)
+    values = JsonField(null=True)
     solution = ForeignKeyField(Solution, related_name="variables")
 
     def __unicode__(self):
         return "var {} ({})".format(self.name, self.type)
-
-
-class VarValue(BaseModel):
-    """Valid values for a variable.
-
-    Values are serialized as json strings in the database.
-
-    """
-    var = ForeignKeyField(Var, related_name='values')
-    value = JsonField()
 
 
 class BaseIndexModel(FTSModel):
@@ -235,7 +226,7 @@ def index_entry(entry):
 
 
 _TABLES = [User, License, Problem, Toolbox, ToolboxDependency, Solution,
-           SolutionDependency, Var, VarValue, Source, ToolboxImage,
+           SolutionDependency, Var, Source, ToolboxImage,
            SolutionImage]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 
