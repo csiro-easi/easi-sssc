@@ -1,0 +1,6 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+{{ super() }}
+<a href="{{ url_for('site.index') }}">Return to the marketplace</a>
+{% endblock %}
