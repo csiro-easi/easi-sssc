@@ -59,11 +59,11 @@
         }
     ],
 
-    // This entry includes metadata about the SCM entry itself.
+    // This entry includes metadata about the SSC entry itself.
     //
     // author       -- (string) who submitted the solution
     // version      -- (string) generated version number
-    // create_at    -- (string datetime) date solution was submitted to the SCM
+    // create_at    -- (string datetime) date solution was submitted to the SSC
     "metadata": {
         "author": "Joe Bloggs",
         "version": "1.0",

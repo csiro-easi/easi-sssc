@@ -5,7 +5,7 @@ import argparse
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Manage the SCM app")
+    parser = argparse.ArgumentParser(description="Manage the SSC app")
     parser.add_argument('-b', '--bootstrap', action='store_true', help="Initialise a new database")
     args = parser.parse_args()
 
