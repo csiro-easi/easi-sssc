@@ -3,7 +3,7 @@ from flask import (Blueprint, request, render_template, url_for, jsonify,
 from flask.views import MethodView
 from markdown import markdown
 from app import app
-from models import Toolbox, Entry, Problem, Solution, text_search, User, Var, Dependency
+from models import Toolbox, Entry, Problem, Solution, text_search, User
 from werkzeug.exceptions import NotAcceptable
 from peewee import SelectQuery
 
