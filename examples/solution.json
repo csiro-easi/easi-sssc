@@ -1,6 +1,6 @@
 {
     // ID for the solution should be a resolvable URL
-    "@id": "http://example.org/solutions/abcdefghijklmnop",
+    "uri": "http://example.org/solutions/abcdefghijklmnop",
 
     // Basic information about the solution
     //

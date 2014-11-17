@@ -131,7 +131,7 @@ class EntryView(MethodView):
     def for_api(self, entry):
         d = properties(entry, ['id', 'name', 'description', 'created_at',
                                'version', ('author.name', 'author')])
-        d['@id'] = entry_url(entry)
+        d['uri'] = entry_url(entry)
         # Make sure entry.dependencies is the field, not
         # SelectQuery.dependencies method.
         if type(entry.dependencies) == list:
@@ -157,9 +157,9 @@ class SolutionView(EntryView):
     def for_api(self, entry):
         d = super().for_api(entry)
         problem = properties(entry.problem, ['name', 'description'])
-        problem.update({'@id': entry_url(entry.problem)})
+        problem.update({'uri': entry_url(entry.problem)})
         toolbox = properties(entry.toolbox, ['name', 'description'])
-        toolbox.update({'@id': entry_url(entry.toolbox)})
+        toolbox.update({'uri': entry_url(entry.toolbox)})
         d.update({
             'problem': problem,
             'toolbox': toolbox,
@@ -212,8 +212,8 @@ class EntriesView(MethodView):
     model = Entry
     entry_type = 'entry'
 
-    """Handle all entries."""
     def get(self, format=None):
+        """Handle all entries."""
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
         entries = self.query()
@@ -264,7 +264,7 @@ class EntriesView(MethodView):
                                'created_at', ('author.name', 'author')])
         d.update({
             'type': self.entry_type,
-            '@id': entry_url(entry)
+            'uri': entry_url(entry)
         })
         return d
 
@@ -283,11 +283,18 @@ class SolutionsView(EntriesView):
     model = Solution
     entry_type = 'solution'
 
+    def query(self, problem_id=None):
+        """Return a list of Solutions, optionally filtered by Problem."""
+        solutions = Solution.select()
+        if problem_id is not None:
+            solutions = solutions.where(Solution.problem == problem_id)
+        return solutions
+
     def listing(self, entry):
         problem = properties(entry.problem, ['name', 'description'])
-        problem.update({'@id': entry_url(entry.problem)})
+        problem.update({'uri': entry_url(entry.problem)})
         toolbox = properties(entry.toolbox, ['name', 'description'])
-        toolbox.update({'@id': entry_url(entry.toolbox)})
+        toolbox.update({'uri': entry_url(entry.toolbox)})
         d = super().listing(entry)
         d.update({
             'problem': problem,

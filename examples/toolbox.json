@@ -1,6 +1,6 @@
 {
     // ID of this toolbox entry, should be a URL to retrieve the entry
-    "@id": "http://example.org/toolbox/abcde",
+    "uri": "http://example.org/toolbox/abcde",
 
     // Basic information about the scientific code
     //
