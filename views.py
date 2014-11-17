@@ -283,11 +283,16 @@ class SolutionsView(EntriesView):
     model = Solution
     entry_type = 'solution'
 
-    def query(self, problem_id=None):
+    def get(self):
+        """Check for a problem query arg."""
+        self.problem_id = request.args.get("problem")
+        return super().get(self)
+
+    def query(self):
         """Return a list of Solutions, optionally filtered by Problem."""
         solutions = Solution.select()
-        if problem_id is not None:
-            solutions = solutions.where(Solution.problem == problem_id)
+        if self.problem_id is not None:
+            solutions = solutions.where(Solution.problem == self.problem_id)
         return solutions
 
     def listing(self, entry):
