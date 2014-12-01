@@ -98,7 +98,10 @@ class EntryView(MethodView):
 
     """Handle a single entry."""
     def get(self, entry_id):
-        entry = self.query(entry_id)
+        try:
+            entry = self.query(entry_id)
+        except:
+            abort(404)
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
         if best == "application/json":
@@ -132,6 +135,7 @@ class EntryView(MethodView):
         d = properties(entry, ['id', 'name', 'description', 'created_at',
                                'version', ('author.name', 'author')])
         d['uri'] = entry_url(entry)
+        d['@id'] = entry_url(entry)
         # Make sure entry.dependencies is the field, not
         # SelectQuery.dependencies method.
         if type(entry.dependencies) == list:
@@ -156,10 +160,12 @@ class SolutionView(EntryView):
 
     def for_api(self, entry):
         d = super().for_api(entry)
-        problem = properties(entry.problem, ['name', 'description'])
+        problem = properties(entry.problem, ['id', 'name', 'description'])
         problem.update({'uri': entry_url(entry.problem)})
-        toolbox = properties(entry.toolbox, ['name', 'description'])
+        problem.update({'@id': entry_url(entry.problem)})
+        toolbox = properties(entry.toolbox, ['id', 'name', 'description'])
         toolbox.update({'uri': entry_url(entry.toolbox)})
+        toolbox.update({'@id': entry_url(entry.toolbox)})
         d.update({
             'problem': problem,
             'toolbox': toolbox,
@@ -264,7 +270,8 @@ class EntriesView(MethodView):
                                'created_at', ('author.name', 'author')])
         d.update({
             'type': self.entry_type,
-            'uri': entry_url(entry)
+            'uri': entry_url(entry),
+            '@id': entry_url(entry)
         })
         return d
 
@@ -296,10 +303,12 @@ class SolutionsView(EntriesView):
         return solutions
 
     def listing(self, entry):
-        problem = properties(entry.problem, ['name', 'description'])
+        problem = properties(entry.problem, ['id', 'name', 'description'])
         problem.update({'uri': entry_url(entry.problem)})
-        toolbox = properties(entry.toolbox, ['name', 'description'])
+        problem.update({'@id': entry_url(entry.problem)})
+        toolbox = properties(entry.toolbox, ['id', 'name', 'description'])
         toolbox.update({'uri': entry_url(entry.toolbox)})
+        toolbox.update({'@id': entry_url(entry.toolbox)})
         d = super().listing(entry)
         d.update({
             'problem': problem,
