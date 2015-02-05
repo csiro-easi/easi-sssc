@@ -121,7 +121,7 @@ class Toolbox(Entry):
 
 
 class ToolboxDependency(Dependency):
-    entry = ForeignKeyField(Toolbox, related_name='dependencies')
+    entry = ForeignKeyField(Toolbox, related_name='depends_on')
 
 
 class Image(BaseModel):
@@ -141,7 +141,7 @@ class Solution(Entry):
 
 
 class SolutionDependency(Dependency):
-    entry = ForeignKeyField(Solution, related_name='dependencies')
+    entry = ForeignKeyField(Solution, related_name='depends_on')
 
 
 class SolutionImage(Image):
