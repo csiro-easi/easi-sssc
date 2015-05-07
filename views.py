@@ -11,9 +11,9 @@ site = Blueprint('site', __name__, template_folder='templates')
 
 
 _model_endpoint = {
-    Toolbox: 'site.toolbox',
-    Solution: 'site.solution',
-    Problem: 'site.problem',
+    Toolbox: 'site.toolbox_id',
+    Solution: 'site.solution_id',
+    Problem: 'site.problem_id',
     User: 'site.user'
 }
 
@@ -322,14 +322,26 @@ site.add_url_rule('/toolboxes',
                   view_func=ToolboxesView.as_view('toolboxes'))
 site.add_url_rule('/toolboxes/<int:entry_id>',
                   view_func=ToolboxView.as_view('toolbox'))
+site.add_url_rule('/toolbox/',
+                  view_func=ToolboxesView.as_view('toolbox_list'))
+site.add_url_rule('/toolbox/<int:entry_id>',
+                  view_func=ToolboxView.as_view('toolbox_id'))
 site.add_url_rule('/solutions',
                   view_func=SolutionsView.as_view('solutions'))
 site.add_url_rule('/solutions/<int:entry_id>',
                   view_func=SolutionView.as_view('solution'))
+site.add_url_rule('/solution/',
+                  view_func=SolutionsView.as_view('solution_list'))
+site.add_url_rule('/solution/<int:entry_id>',
+                  view_func=SolutionView.as_view('solution_id'))
 site.add_url_rule('/problems',
                   view_func=ProblemsView.as_view('problems'))
 site.add_url_rule('/problems/<int:entry_id>',
                   view_func=ProblemView.as_view('problem'))
+site.add_url_rule('/problem/',
+                  view_func=ProblemsView.as_view('problem_list'))
+site.add_url_rule('/problem/<int:entry_id>',
+                  view_func=ProblemView.as_view('problem_id'))
 site.add_url_rule('/users/<int:entry_id>',
                   view_func=UserView.as_view('user'))
 
