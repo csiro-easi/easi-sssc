@@ -9,7 +9,7 @@ def bootstrap():
     drop_tables(db)
     create_database(db)
 
-    user = User.create(name="Fred", email="fred@example.org")
+    user = User.create(name="Geoff Squire", email="geoffrey.squire@csiro.au")
 
     anuga_problem = Problem.create(
         name="Regional Inundation modelling (storm-surge or tsunamis)",
