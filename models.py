@@ -63,6 +63,7 @@ class Entry(BaseModel):
     created_at = DateTimeField(default=datetime.datetime.now)
     author = ForeignKeyField(User)
     version = IntegerField(default=1)
+    keywords = TextField()
 
     def __unicode__(self):
         return "entry ({})".format(self.name)
