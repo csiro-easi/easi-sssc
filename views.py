@@ -142,6 +142,9 @@ class EntryView(MethodView):
                                  for dep in entry.depends_on]
         else:
             d['dependencies'] = []
+
+        # Add prov info and return
+        d['@type'] = ['http://www.w3.org/ns/prov#Entity']
         return d
 
 
@@ -176,6 +179,10 @@ class SolutionView(EntryView):
                                          'step', 'values'])
                           for v in entry.variables]
         })
+
+        # Add extra prov info before returning
+        d['@type'].append('http://www.w3.org/ns/prov#Plan')
+        d['http://www.w3.org/ns/prov#wasDerivedFrom'] = [toolbox['@id']]
         return d
 
 
