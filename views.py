@@ -18,6 +18,20 @@ _model_endpoint = {
 }
 
 
+_jsonld_context = {
+    'problem': {
+        '@type': '@id'
+    },
+    'toolbox': {
+        '@type': '@id'
+    },
+    'wasDerivedFrom': {
+        '@id': 'http://www.w3.org/ns/prov#wasDerivedFrom',
+        '@type': '@id'
+    }
+}
+
+
 def entry_url(entry):
     """Return the URL for entry."""
     if entry:
@@ -43,6 +57,46 @@ def entry_type(entry):
 def entry_processor():
     return dict(entry_url=entry_url,
                 entry_type=entry_type)
+
+
+def add_context(response, embed_context=False):
+    """Add the default jsonld context object to response.
+
+    If response already has a @context entry, merge the default into it if it's
+    an object, or leave it alone if it's a string (URI).
+
+    Keys in the default context will not override corresponding entries that
+    already exist in response.
+
+    """
+    if isinstance(response, dict):
+        if '@context' in response:
+            context = response['@context']
+            if embed_context and isinstance(context, dict):
+                for k, v in _jsonld_context:
+                    if k not in context:
+                        context[k] = v
+            # else assume @context is aleady a URL, and do not override it.
+        else:
+            # No existing @context, so add one pointing to the default
+            if embed_context:
+                response['@context'] = _jsonld_context
+            else:
+                response['@context'] = url_for('site.default_context',
+                                               _external=True)
+    return response
+
+
+def jsonldify(x, embed_context=False):
+    """Return a JSON-LD response from x, including the default context.
+
+    If embed_context is True, embed the context object, otherwise link to the
+    default context document.
+
+    """
+    resp = jsonify(add_context(x, embed_context))
+    resp.mimetype = 'application/ld+json'
+    return resp
 
 
 def pluralise(name):
@@ -105,7 +159,7 @@ class EntryView(MethodView):
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
         if best == "application/json":
-            return jsonify(self.for_api(entry))
+            return jsonldify(self.for_api(entry))
         elif best == "text/html":
             return render_template(self.detail_template,
                                    **self.detail_template_args(entry))
@@ -177,12 +231,11 @@ class SolutionView(EntryView):
                                          'description', 'optional',
                                          'default', 'min', 'max',
                                          'step', 'values'])
-                          for v in entry.variables]
+                          for v in entry.variables],
+            # Include prov info
+            '@type': 'http://www.w3.org/ns/prov#Plan',
+            'wasDerivedFrom': [toolbox['@id']]
         })
-
-        # Add extra prov info before returning
-        d['@type'].append('http://www.w3.org/ns/prov#Plan')
-        d['http://www.w3.org/ns/prov#wasDerivedFrom'] = [toolbox['@id']]
         return d
 
 
@@ -232,7 +285,7 @@ class EntriesView(MethodView):
         entries = self.query()
         if best == "application/json":
             j = self.for_api(entries)
-            return jsonify(j)
+            return jsonldify(j)
         elif best == "text/html":
             return render_template(
                 'entries/list.html',
@@ -380,6 +433,11 @@ def search():
     return render_template('search_results.html',
                            search=search,
                            results=results)
+
+
+@site.route('/sssc.jsonld')
+def default_context():
+    return jsonldify({}, True)
 
 
 @site.route('/')
