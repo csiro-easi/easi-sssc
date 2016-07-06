@@ -187,7 +187,7 @@ class EntryView(MethodView):
 
     def for_api(self, entry):
         d = properties(entry, ['id', 'name', 'description', 'created_at',
-                               'version', ('author.name', 'author')])
+                               'version', 'keywords', ('author.name', 'author')])
         d['uri'] = entry_url(entry)
         d['@id'] = entry_url(entry)
         if 'depends_on' in vars(entry):
@@ -327,7 +327,7 @@ class EntriesView(MethodView):
     def listing(self, entry):
         # Return a dict view of entry
         d = properties(entry, ['id', 'name', 'description', 'version',
-                               'created_at', ('author.name', 'author')])
+                               'created_at', 'keywords', ('author.name', 'author')])
         d.update({
             'type': self.entry_type,
             'uri': entry_url(entry),
