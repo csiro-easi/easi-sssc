@@ -6,6 +6,11 @@ from app import app
 from models import Toolbox, Entry, Problem, Solution, text_search, User
 from werkzeug.exceptions import NotAcceptable
 from peewee import SelectQuery
+from rdflib import Graph, plugin, URIRef, Literal, BNode, Namespace
+from rdflib.namespace import RDF
+from rdflib.serializer import Serializer
+
+PROV = Namespace("http://www.w3.org/ns/prov#")
 
 site = Blueprint('site', __name__, template_folder='templates')
 
@@ -19,15 +24,12 @@ _model_endpoint = {
 
 
 _jsonld_context = {
-    'problem': {
-        '@type': '@id'
+    "prov": "http://www.w3.org/ns/prov#",
+    "problem": {
+        "@type": "@id"
     },
-    'toolbox': {
-        '@type': '@id'
-    },
-    'wasDerivedFrom': {
-        '@id': 'http://www.w3.org/ns/prov#wasDerivedFrom',
-        '@type': '@id'
+    "toolbox": {
+        "@type": "@id"
     }
 }
 
@@ -42,6 +44,24 @@ def entry_url(entry):
         return url_for(_model_endpoint[type(entry)],
                        _external=True,
                        entry_id=entry_id)
+
+
+def prov_url(entry):
+    """Return the prov URL for entry."""
+    if entry:
+        if isinstance(entry, dict):
+            entry_id = entry['id']
+            entry_type = entry['type']
+        else:
+            entry_id = entry.id
+            entry_type = type(entry).__name__.lower()
+        endpoint = "site.{}_prov".format(entry_type)
+        return url_for(endpoint, _external=True, entry_id=entry_id)
+
+
+def entry_term(entry):
+    """Return the rdflib term referring to entry."""
+    return URIRef(entry_url(entry))
 
 
 @app.template_filter('markdown')
@@ -59,7 +79,7 @@ def entry_processor():
                 entry_type=entry_type)
 
 
-def add_context(response, embed_context=False):
+def add_context(response, context=_jsonld_context, embed=False):
     """Add the default jsonld context object to response.
 
     If response already has a @context entry, merge the default into it if it's
@@ -72,14 +92,14 @@ def add_context(response, embed_context=False):
     if isinstance(response, dict):
         if '@context' in response:
             context = response['@context']
-            if embed_context and isinstance(context, dict):
+            if embed and isinstance(context, dict):
                 for k, v in _jsonld_context:
                     if k not in context:
                         context[k] = v
             # else assume @context is aleady a URL, and do not override it.
         else:
             # No existing @context, so add one pointing to the default
-            if embed_context:
+            if embed:
                 response['@context'] = _jsonld_context
             else:
                 response['@context'] = url_for('site.default_context',
@@ -87,14 +107,14 @@ def add_context(response, embed_context=False):
     return response
 
 
-def jsonldify(x, embed_context=False):
+def jsonldify(x, context=_jsonld_context, embed=False):
     """Return a JSON-LD response from x, including the default context.
 
-    If embed_context is True, embed the context object, otherwise link to the
+    If embed is True, embed the context object, otherwise link to the
     default context document.
 
     """
-    resp = jsonify(add_context(x, embed_context))
+    resp = jsonify(add_context(x, context, embed))
     resp.mimetype = 'application/ld+json'
     return resp
 
@@ -198,7 +218,8 @@ class EntryView(MethodView):
             d['dependencies'] = []
 
         # Add prov info and return
-        d['@type'] = ['http://www.w3.org/ns/prov#Entity']
+        d['@type'] = ['prov:Entity']
+        d['prov:has_provenance'] = prov_url(entry)
         return d
 
 
@@ -233,8 +254,7 @@ class SolutionView(EntryView):
                                          'step', 'values'])
                           for v in entry.variables],
             # Include prov info
-            '@type': 'http://www.w3.org/ns/prov#Plan',
-            'wasDerivedFrom': [toolbox['@id']]
+            '@type': 'prov:Plan'
         })
         return d
 
@@ -277,6 +297,7 @@ class UserView(MethodView):
 class EntriesView(MethodView):
     model = Entry
     entry_type = 'entry'
+    prov_type = 'prov:Entity'
 
     def get(self, format=None):
         """Handle all entries."""
@@ -331,7 +352,9 @@ class EntriesView(MethodView):
         d.update({
             'type': self.entry_type,
             'uri': entry_url(entry),
-            '@id': entry_url(entry)
+            '@id': entry_url(entry),
+            '@type': self.prov_type,
+            'prov:has_provenance': prov_url(entry)
         })
         return d
 
@@ -349,6 +372,7 @@ class ToolboxesView(EntriesView):
 class SolutionsView(EntriesView):
     model = Solution
     entry_type = 'solution'
+    prov_type = 'prov:Plan'
 
     def get(self):
         """Check for a problem query arg."""
@@ -375,6 +399,78 @@ class SolutionsView(EntriesView):
             'toolbox': toolbox
         })
         return d
+
+
+class ProvView(MethodView):
+    model = Entry
+
+    prov_context = {
+        "Entity": "http://www.w3.org/ns/prov#Entity",
+        "Plan": "http://www.w3.org/ns/prov#Plan",
+        "wasDerivedFrom": {
+            "@id": "http://www.w3.org/ns/prov#wasDerivedFrom",
+            "@type": "@id"
+        }    
+    }
+
+    def get(self, entry_id):
+        """Return the PROV info for entry_id."""
+        # Retrieve a single entry
+        try:
+            entry = self.model.get(self.model.id == entry_id)
+        except:
+            abort(404)
+        # Build the RDF prov graph
+        g = Graph()
+        for t in self.triples(entry):
+            g.add(t)
+        # Return the appropriate serialization
+        matchable = ["application/ld+json",
+                     "application/json",
+                     "text/turtle",
+                     "application/rdf+xml"]
+        best = request.accept_mimetypes.best_match(matchable, default=None)
+        if best is None:
+            return NotAcceptable
+        serialize_args = dict(format=best)
+        mimetype = best
+        if best == "application/json":
+            best = "application/ld+json"
+            serialize_args = dict(format=best)
+        if best == "application/ld+json":
+            serialize_args.update(context=self.prov_context, indent=4)
+        
+        resp = make_response(g.serialize(**serialize_args))
+        resp.mimetype = mimetype
+        return resp
+
+    def triples(self, entry):
+        triples = [(entry_term(entry), RDF.type, PROV.Entity)]
+        return triples
+
+    def query(self, entry_id):
+        raise NotImplemented
+
+
+class ProblemProvView(ProvView):
+    model = Problem
+
+
+class SolutionProvView(ProvView):
+    model = Solution
+
+    def triples(self, entry):
+        triples = super().triples(entry)
+        solution = entry_term(entry)
+        triples.append((solution, RDF.type, PROV.Plan))
+        triples.extend([(solution, PROV.wasDerivedFrom, entry_term(t))
+                        for t in [entry.toolbox]])
+        triples.append((solution, PROV.wasDerivedFrom, entry_term(entry.problem)))
+        return triples
+
+
+class ToolboxProvView(ProvView):
+    model = Toolbox
 
 
 # Dispatch to json/html views
@@ -404,6 +500,14 @@ site.add_url_rule('/problem/<int:entry_id>',
                   view_func=ProblemView.as_view('problem_id'))
 site.add_url_rule('/users/<int:entry_id>',
                   view_func=UserView.as_view('user'))
+# Prov endpoints
+site.add_url_rule('/problem/<int:entry_id>/prov',
+                  view_func=ProblemProvView.as_view('problem_prov'))
+site.add_url_rule('/solution/<int:entry_id>/prov',
+                  view_func=SolutionProvView.as_view('solution_prov'))
+site.add_url_rule('/toolbox/<int:entry_id>/prov',
+                  view_func=ToolboxProvView.as_view('toolbox_prov'))
+                 
 
 
 @site.route('/add/problem')

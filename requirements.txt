@@ -19,3 +19,5 @@ pyflakes==0.8.1
 pytz==2014.7
 six==1.8.0
 wtf-peewee==0.2.3
+rdflib==4.2.1
+rdflib-jsonld==0.4.0
