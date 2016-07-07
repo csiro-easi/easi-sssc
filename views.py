@@ -24,13 +24,7 @@ _model_endpoint = {
 
 
 _jsonld_context = {
-    "prov": "http://www.w3.org/ns/prov#",
-    "problem": {
-        "@type": "@id"
-    },
-    "toolbox": {
-        "@type": "@id"
-    }
+    "prov": "http://www.w3.org/ns/prov#"
 }
 
 
@@ -79,7 +73,7 @@ def entry_processor():
                 entry_type=entry_type)
 
 
-def add_context(response, context=_jsonld_context, embed=False):
+def add_context(response, context=_jsonld_context, embed=True):
     """Add the default jsonld context object to response.
 
     If response already has a @context entry, merge the default into it if it's
@@ -107,7 +101,7 @@ def add_context(response, context=_jsonld_context, embed=False):
     return response
 
 
-def jsonldify(x, context=_jsonld_context, embed=False):
+def jsonldify(x, context=_jsonld_context, embed=True):
     """Return a JSON-LD response from x, including the default context.
 
     If embed is True, embed the context object, otherwise link to the
@@ -438,8 +432,8 @@ class ProvView(MethodView):
             best = "application/ld+json"
             serialize_args = dict(format=best)
         if best == "application/ld+json":
-            serialize_args.update(context=self.prov_context, indent=4)
-        
+            serialize_args.update(context=self.prov_context,
+                                  indent=4)
         resp = make_response(g.serialize(**serialize_args))
         resp.mimetype = mimetype
         return resp
