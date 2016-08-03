@@ -1,0 +1,8 @@
+# Retrieve data for a solution
+GET http://localhost:5000/solution/1
+Accept: application/json
+
+# Retrieve prov info for a solution
+GET http://localhost:5000/solution/1/prov
+Accept: application/json
+
