@@ -1,0 +1,29 @@
+* Move to Puppet
+** Solution Centre
+*** TODO 0..* dependencies for Solution and Toolbox
+Allow multiple dependencies for Solutions and Toolboxes
+*** TODO Add external puppet module dependency type
+Describe enough to install a third-party puppet module, e.g. from puppet forge.
+
+- Module name
+- (optional) repository URL, default puppet forge
+- (optional) version
+*** TODO URL for instance document
+**** TODO Solution links to template
+Solution should link to a single python file that instantiates the template to
+run.
+**** TODO Toolbox links to Puppet module
+Toolbox should link to a single puppet module, which will instantiate the
+toolbox environment when used with "puppet apply".
+**** TODO (optional) adapt image instance to URL only?
+** Portal support
+*** TODO Walk dependency tree for solution
+Gather dependencies for a solution by walking the tree of dependencies. Solution
+depends on Toolbox(es), which depend on Toolbox(es), python modules and/or
+external puppet modules. Also need to support direct python/puppet deps on a
+solution, though perhaps limit to python deps there?
+
+Result should be a list of dependencies to install - order is important!
+*** TODO Build image based on deps
+Start with a default base snapshot, with portal gubbins pre-installed? Then
+build a bootstrap script that runs through deps list in order.
