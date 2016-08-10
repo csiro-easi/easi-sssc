@@ -1,18 +1,22 @@
 * Move to Puppet
 ** Solution Centre
-*** TODO 0..* dependencies for Solution and Toolbox
+*** DONE 0..* dependencies for Solution and Toolbox
+CLOSED: [2016-08-10 Wed 13:34]
 Allow multiple dependencies for Solutions and Toolboxes
-*** TODO Add external puppet module dependency type
+*** DONE Add external puppet module dependency type
+CLOSED: [2016-08-10 Wed 13:34]
 Describe enough to install a third-party puppet module, e.g. from puppet forge.
 
 - Module name
 - (optional) repository URL, default puppet forge
 - (optional) version
 *** TODO URL for instance document
-**** TODO Solution links to template
+**** DONE Solution links to template
+CLOSED: [2016-08-10 Wed 13:34]
 Solution should link to a single python file that instantiates the template to
 run.
-**** TODO Toolbox links to Puppet module
+**** DONE Toolbox links to Puppet module
+CLOSED: [2016-08-10 Wed 13:34]
 Toolbox should link to a single puppet module, which will instantiate the
 toolbox environment when used with "puppet apply".
 **** TODO (optional) adapt image instance to URL only?
