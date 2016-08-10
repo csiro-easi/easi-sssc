@@ -1,0 +1,13 @@
+# Retrieve a solution (default JSON)
+GET http://localhost:5000/solution/2
+
+# Retrieve the HTML description of a solution
+GET http://localhost:5000/solution/2
+Accept: text/html
+
+# Retrieve a toolbox
+GET http://localhost:5000/toolbox/2
+
+# Now with extra html
+GET http://localhost:5000/toolbox/2
+Accept: text/html
