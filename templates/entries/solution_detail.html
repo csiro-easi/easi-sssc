@@ -18,13 +18,16 @@
 
   <div class="col-md-6">
     <div class="panel panel-default">
-      <div class="panel-heading"><h2 class="panel-title">Toolbox</h2></div>
+      <div class="panel-heading"><h2 class="panel-title">Toolboxes</h2></div>
       <div class="panel-body">
-        {# <a href="{{ entry_url(entry.toolbox) }}">{{ entry_url(entry.toolbox) }}</a> #}
-        {% with %}
-        {% set entry = entry.toolbox %}
-        {% include 'entries/brief.html' %}
-        {% endwith %}
+          <div class="list-group">
+              {% for t in entry.toolboxes %}
+              {% with %}
+              {% set entry = t.dependency %}
+              {% include 'entries/list-entry.html' %}
+              {% endwith %}
+              {% endfor %}
+          </div>
       </div>
     </div>
   </div>
@@ -57,7 +60,7 @@
 <div class="panel panel-default">
   <div class="panel-heading"><h2 class="panel-title">Source</h2></div>
   <div class="panel-body">
-    <script type="syntaxhighlighter" class="brush: python"><![CDATA[{{ entry.template|safe }}]]></script>
+    <script type="text/syntaxhighlighter" class="brush: python"><![CDATA[{{ entry.template|safe }}]]></script>
   </div>
 </div>
 
