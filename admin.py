@@ -5,8 +5,8 @@ from flask.ext.admin.contrib.peewee.form import CustomModelConverter
 from flask.ext.security import current_user
 from wtforms import fields
 from app import app
-from models import User, Problem, Solution, Toolbox, Image, ToolboxImage, SolutionImage, Dependency, SolutionDependency, ToolboxDependency, Var, JsonField
 from security import security
+from models import User, Problem, Solution, Toolbox, Dependency, SolutionToolbox, SolutionDependency, ToolboxToolbox, ToolboxDependency, Var, JsonField
 
 admin = Admin(app)
 
@@ -47,11 +47,11 @@ class ProblemAdmin(ProtectedModelView):
 
 class SolutionAdmin(ProtectedModelView):
     model_form_converter = VarValuesConverter
-    inline_models = (SolutionDependency, SolutionImage, Var)
+    inline_models = (SolutionDependency, SolutionToolbox, Var)
 
 
 class ToolboxAdmin(ProtectedModelView):
-    inline_models = (ToolboxDependency, ToolboxImage)
+    inline_models = (ToolboxDependency, ToolboxToolbox)
 
 
 # admin.add_view(UserAdmin(User))

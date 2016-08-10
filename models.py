@@ -13,8 +13,9 @@ from app import app
 SOURCE_TYPES = (('git', 'GIT repository'),
                 ('svn', 'Subversion repository'))
 
-# Types of dependencies we can resolve
-DEPENDENCY_TYPES = (('system', 'System package'),
+# Types of external dependencies we can resolve
+DEPENDENCY_TYPES = (('puppet', 'Puppet module from forge-style repository'),
+                    ('requirements', 'Requirements file with python packages from pypi'),
                     ('python', 'Python package from pypi'))
 
 # Variable types for solutions
@@ -29,6 +30,10 @@ db = SqliteExtDatabase(app.config['SQLITE_DB_FILE'],
                        threadlocals=True)
 #                       journal_mode='WAL')
 
+# Runtime choices for solution templates
+RUNTIME_CHOICES = (('python2', 'Latest Python 2.x'),
+                   ('python3', 'Latest Python 3.x'),
+                   ('python', 'Latest Python 2 or 3'))
 
 def text_search(text):
     """Search for entries that match text.
@@ -79,7 +84,10 @@ class Entry(BaseModel):
 
     name -- Short name
     description -- Longer description
-    metadata -- Catalogue metadata
+    created_at -- Datetime this Entry was added to the catalogue
+    author -- Who created this Entry
+    version -- Version number for this Entry
+    keywords -- Space separated list of keywords describing this Entry
 
     """
     id = PrimaryKeyField()
@@ -103,14 +111,32 @@ class License(BaseModel):
 
 
 class Dependency(BaseModel):
-    """Dependency on an external package."""
+    """Dependency on external python packages or a puppet module.
+
+    For types that resolve to a single endpoint (python requirements document),
+    identifier is an URL. Other types (puppet module, python dependency) use
+    identifier for the name of the module or package, with optional version and
+    repository attached.
+
+    """
     type = CharField(choices=DEPENDENCY_TYPES)
-    name = CharField(null=True)
+    identifier = CharField()
     version = CharField(null=True)
-    path = CharField(null=True)
+    repository = CharField(null=True)
 
     def __unicode__(self):
-        return "({}) {}".format(self.type, self.name if self.name else self.path)
+        return "({}) {}".format(self.type, self.identifier)
+
+    class Meta:
+        indexes = (
+            # Entries should be unique
+            (('type', 'identifier', 'version', 'repository'), True),
+        )
+
+
+class ExternalDependency(BaseModel):
+    entry = ForeignKeyField(Entry)
+    dependency = ForeignKeyField(Dependency)
 
 
 class Problem(Entry):
@@ -144,35 +170,35 @@ class Toolbox(Entry):
     homepage = CharField(null=True)
     license = ForeignKeyField(License, related_name="toolboxes")
     source = ForeignKeyField(Source, related_name="toolboxes")
+    puppet = CharField(help_text="URL of a Puppet script that will instantiate this Toolbox.")
 
 
-class ToolboxDependency(Dependency):
-    entry = ForeignKeyField(Toolbox, related_name='depends_on')
+class ToolboxDependency(BaseModel):
+    """External dependencies for Toolboxes."""
+    toolbox = ForeignKeyField(Toolbox, related_name="dependencies")
+    dependency = ForeignKeyField(Dependency)
 
 
-class Image(BaseModel):
-    provider = CharField()
-    image_id = CharField()
-
-
-class ToolboxImage(Image):
-    toolbox = ForeignKeyField(Toolbox, related_name='images')
-    sc_path = CharField(null=True)
+class ToolboxToolbox(BaseModel):
+    """Toolbox dependencies for Toolboxes."""
+    toolbox = ForeignKeyField(Toolbox, related_name="toolboxes")
+    dependency = ForeignKeyField(Toolbox)
 
 
 class Solution(Entry):
     problem = ForeignKeyField(Problem, related_name="solutions")
-    toolbox = ForeignKeyField(Toolbox, related_name="solutions")
-    template = TextField()
+    template = CharField()
+    runtime = CharField(choices=RUNTIME_CHOICES, default="python")
 
 
-class SolutionDependency(Dependency):
-    entry = ForeignKeyField(Solution, related_name='depends_on')
+class SolutionDependency(BaseModel):
+    solution = ForeignKeyField(Solution, related_name="dependencies")
+    dependency = ForeignKeyField(Dependency)
 
 
-class SolutionImage(Image):
-    solution = ForeignKeyField(Solution, related_name='images')
-    sc_path = CharField(null=True)
+class SolutionToolbox(BaseModel):
+    solution = ForeignKeyField(Solution, related_name="toolboxes")
+    dependency = ForeignKeyField(Toolbox)
 
 
 class JsonField(CharField):
@@ -253,9 +279,9 @@ def index_entry(entry):
         obj.save()
 
 
-_TABLES = [User, Role, UserRoles, License, Problem, Toolbox, ToolboxDependency,
-           Solution, SolutionDependency, Var, Source, ToolboxImage,
-           SolutionImage]
+_TABLES = [User, Role, UserRoles, License, Dependency, Problem, Toolbox, ToolboxDependency,
+           ToolboxToolbox, Solution, SolutionDependency, SolutionToolbox, Var,
+           Source]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 
 

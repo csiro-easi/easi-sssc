@@ -242,12 +242,13 @@ class SolutionView(EntryView):
         problem = properties(entry.problem, ['id', 'name', 'description'])
         problem.update({'uri': entry_url(entry.problem)})
         problem.update({'@id': entry_url(entry.problem)})
-        toolbox = properties(entry.toolbox, ['id', 'name', 'description'])
-        toolbox.update({'uri': entry_url(entry.toolbox)})
-        toolbox.update({'@id': entry_url(entry.toolbox)})
+        toolboxes = [entry_url(t.dependency) for t in entry.toolboxes]
+        dependencies = [properties(d.dependency, ['type', 'identifier',
+                                                  'version', 'repository'])
+                        for d in entry.dependencies]
         d.update({
             'problem': problem,
-            'toolbox': toolbox,
+            'toolboxes': toolboxes,
             'template': entry.template,
             'variables': [properties(v, ['name', 'type', 'label',
                                          'description', 'optional',
@@ -286,12 +287,11 @@ class ToolboxView(EntryView):
                                          'default', 'min', 'max',
                                          'step', 'values'])
                           for v in entry.variables],
-            'dependencies': [properties(dep, [
-                'type',
-                'name',
-                'version',
-                'path'])
-                for dep in entry.depends_on]
+            'puppet': entry.puppet,
+            'toolboxes': [entry_url(t.dependency) for t in entry.toolboxes],
+            'dependencies': [properties(d.dependency, ['type', 'identifier',
+                                                       'version', 'repository'])
+                             for d in entry.dependencies]
         })
         return d
 
@@ -408,13 +408,11 @@ class SolutionsView(EntriesView):
         problem = properties(entry.problem, ['id', 'name', 'description'])
         problem.update({'uri': entry_url(entry.problem)})
         problem.update({'@id': entry_url(entry.problem)})
-        toolbox = properties(entry.toolbox, ['id', 'name', 'description'])
-        toolbox.update({'uri': entry_url(entry.toolbox)})
-        toolbox.update({'@id': entry_url(entry.toolbox)})
+        toolboxes = [entry_url(t.dependency) for t in entry.toolboxes]
         d = super().listing(entry)
         d.update({
             'problem': problem,
-            'toolbox': toolbox
+            'toolboxes': toolboxes
         })
         return d
 
@@ -428,7 +426,10 @@ class ProvView(MethodView):
         "wasDerivedFrom": {
             "@id": "http://www.w3.org/ns/prov#wasDerivedFrom",
             "@type": "@id"
-        }    
+        },
+        "toolboxes": {
+            "@type": "@id"
+        }
     }
 
     def get(self, entry_id):

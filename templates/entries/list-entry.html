@@ -1,0 +1,9 @@
+{% set url = entry_url(entry) %}
+
+<a href="{{ url }}"
+   class="list-group-item"
+   title="{{entry.description}}">
+    {{entry.name}}
+    {# <h4 class="list-group-item-heading">{{entry.name}}</h4>
+    <p class="list-group-item-text">{{entry.description|markdown|safe}}</p> #}
+</a>
