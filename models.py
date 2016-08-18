@@ -134,11 +134,6 @@ class Dependency(BaseModel):
         )
 
 
-class ExternalDependency(BaseModel):
-    entry = ForeignKeyField(Entry)
-    dependency = ForeignKeyField(Dependency)
-
-
 class Problem(Entry):
     """A problem to be solved.
 
@@ -221,10 +216,12 @@ class Var(BaseModel):
     label -- User friendly label
     description -- Additional help text
     type -- Variable type (int, double, string, random-int)
+    optional -- True if optional
     values -- List of valid values
     min -- Minimum value
     max -- Maximum value
     step -- Increment between min and max
+    solution -- Solution this Var belongs to
 
     """
     name = CharField()
