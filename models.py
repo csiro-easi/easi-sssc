@@ -164,8 +164,11 @@ class Source(BaseModel):
 class Toolbox(Entry):
     homepage = CharField(null=True)
     license = ForeignKeyField(License, related_name="toolboxes")
-    source = ForeignKeyField(Source, related_name="toolboxes")
-    puppet = CharField(help_text="URL of a Puppet script that will instantiate this Toolbox.")
+    source = ForeignKeyField(Source, null=True, related_name="toolboxes")
+    puppet = CharField(
+        null=True,
+        help_text="URL of a Puppet script that will instantiate this Toolbox."
+    )
 
 
 class ToolboxDependency(BaseModel):

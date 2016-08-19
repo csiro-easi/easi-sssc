@@ -17,11 +17,11 @@ def create(user):
         name="escript",
         description="Escript is a programming tool for implementing mathematical models (based on non-linear, coupled, time-dependent partial differential equations) in Python using the finite element method (FEM).",
         author=user,
-        license=License.create(
+        license=License.get_or_create(
             name="Apache License, version 2.0",
             url="http://www.apache.org/licenses/LICENSE-2.0"
         ),
-        source=Source.create(
+        source=Source.get_or_create(
             type="svn",
             url="https://svn.geocomp.uq.edu.au/svn/esys13"
         ),

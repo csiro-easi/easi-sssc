@@ -13,13 +13,18 @@ def create(user):
     hwtoolbox = create_toolbox(
         name="Python",
         description="A basic Python environment.",
+        license=License.get_or_create(
+            name="Apache License, version 2.0",
+            url="http://www.apache.org/licenses/LICENSE-2.0"
+        ),
         author=user
     )
     hwsolution = create_solution(
         name="Print with Python",
         description="Print something using Python",
         author=user,
-        template="http://localhost:5000/scm/static/test/helloworld.py"
+        template="http://localhost:5000/scm/static/test/helloworld.py",
+        problem=hwproblem
     )
     Var.create(solution=hwsolution,
                type="string",
