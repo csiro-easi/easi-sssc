@@ -1,7 +1,9 @@
 # coding: utf-8
 
-from app import db
-from models import User, Problem, Solution, Toolbox, Var, Source, ToolboxDependency, SolutionDependency, License, create_database, drop_tables, index_entry
+from models import db, User, Problem, Solution, Toolbox, Var, Source, \
+    ToolboxDependency, SolutionDependency, License, create_database, \
+    drop_tables, index_entry
+from security import user_datastore
 
 
 def bootstrap():
@@ -9,7 +11,10 @@ def bootstrap():
     drop_tables(db)
     create_database(db)
 
-    user = User.create(name="Geoff Squire", email="geoffrey.squire@csiro.au")
+    user_datastore.create_user(email='geoffrey.squire@csiro.au',
+                               password='password',
+                               name='Geoff Squire')
+    user = User.get(email="geoffrey.squire@csiro.au")
 
     anuga_problem = Problem.create(
         name="Regional Inundation modelling (storm-surge or tsunamis)",

@@ -3,7 +3,7 @@ from flask import (Blueprint, request, render_template, url_for, jsonify,
 from flask.views import MethodView
 from markdown import markdown
 from app import app
-from models import Toolbox, Entry, Problem, Solution, text_search, User
+from models import db, Toolbox, Entry, Problem, Solution, text_search, User
 from werkzeug.exceptions import NotAcceptable
 from peewee import SelectQuery
 from rdflib import Graph, plugin, URIRef, Literal, BNode, Namespace
@@ -13,6 +13,13 @@ from rdflib.serializer import Serializer
 PROV = Namespace("http://www.w3.org/ns/prov#")
 
 site = Blueprint('site', __name__, template_folder='templates')
+
+
+# Connect to the database now to catch any errors here
+@app.before_first_request
+def first_setup():
+    print("Setting up")
+    db.connect()
 
 
 _model_endpoint = {

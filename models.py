@@ -1,9 +1,12 @@
 from flask import json
 from peewee import *
-from playhouse.sqlite_ext import FTSModel
-from app import db
+# Use the ext database to get FTS support
+# from peewee import SqliteDatabase
+from playhouse.sqlite_ext import FTSModel, SqliteExtDatabase
+from flask.ext.security import UserMixin, RoleMixin
 import datetime
 import importlib
+from app import app
 
 
 # Valid source repositories
@@ -20,6 +23,11 @@ VARIABLE_TYPES = (('int', 'Integer'),
                   ('string', 'String'),
                   ('random-int', 'Random Integer'),
                   ('file', 'Input dataset'))
+
+# Database set up
+db = SqliteExtDatabase(app.config['SQLITE_DB_FILE'],
+                       threadlocals=True)
+#                       journal_mode='WAL')
 
 
 def text_search(text):
@@ -39,14 +47,31 @@ class BaseModel(Model):
         database = db
 
 
-class User(BaseModel):
+class Role(BaseModel):
+    """Auth role"""
+    name = CharField(unique=True)
+    description = TextField(null=True)
+
+
+class User(BaseModel, UserMixin):
     """Catalogue user."""
     id = PrimaryKeyField()
     email = CharField(unique=True)
+    password = TextField()
     name = CharField()
+    active = BooleanField(default=True)
+    confirmed_at = DateTimeField(null=True)
 
     def __unicode__(self):
         return self.name
+
+
+class UserRoles(BaseModel):
+    """Many-to-many relationship between Users and Roles."""
+    user = ForeignKeyField(User, related_name='roles')
+    role = ForeignKeyField(Role, related_name='users')
+    name = property(lambda self: self.role.name)
+    description = property(lambda self: self.role.description)
 
 
 class Entry(BaseModel):
@@ -227,8 +252,8 @@ def index_entry(entry):
         obj.save()
 
 
-_TABLES = [User, License, Problem, Toolbox, ToolboxDependency, Solution,
-           SolutionDependency, Var, Source, ToolboxImage,
+_TABLES = [User, Role, UserRoles, License, Problem, Toolbox, ToolboxDependency,
+           Solution, SolutionDependency, Var, Source, ToolboxImage,
            SolutionImage]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 
