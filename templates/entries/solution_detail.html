@@ -59,12 +59,15 @@
 
 <div class="panel panel-default">
   <div class="panel-heading"><h2 class="panel-title">Source</h2></div>
-  <div class="panel-body">
-    <script type="text/syntaxhighlighter" class="brush: python"><![CDATA[{{ entry.template|safe }}]]></script>
+  <div class="panel-body template-source">
   </div>
 </div>
 
 {# Include dependencies last #}
 {% include 'entries/dependencies.html' %}
 
+{% endblock %}
+
+{% block js_footer %}
+<script type="text/javascript">show_solution_template("{{entry.template}}");</script>
 {% endblock %}

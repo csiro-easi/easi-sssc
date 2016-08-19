@@ -10,3 +10,18 @@ function show_entry_json(entry) {
           },
          "script");
 }
+
+/**
+ * Display the template source in a solution.
+ */
+function show_solution_template(template) {
+    $.get(template,
+          function(data) {
+              var code =
+                  $('<script type="text/syntaxhighlighter" class="brush: python">')
+                  .text(data);
+              $('.template-source').append(code);
+              SyntaxHighlighter.highlight(null, code[0]);
+          },
+          "script");
+}
