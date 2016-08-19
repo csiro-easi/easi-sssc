@@ -1,8 +1,8 @@
-from models import (Problem, Solution, Toolbox, Dependency, Var, Source,
-                    ToolboxDependency, SolutionDependency, ToolboxToolbox, SolutionToolbox,
-                    License)
-from bootstrap import (create_problem, create_toolbox, create_solution,
-                       solution_dep, toolbox_dep)
+from models import Problem, Solution, Toolbox, Dependency, Var, Source, \
+    ToolboxDependency, SolutionDependency, ToolboxToolbox, SolutionToolbox, \
+    License
+from bootstrap import create_problem, create_toolbox, create_solution, \
+    solution_dep, toolbox_dep
 
 
 def create(user):
@@ -25,14 +25,14 @@ def create(user):
             type="svn",
             url="https://svn.geocomp.uq.edu.au/svn/esys13"
         ),
-        puppet="http://localhost:5000/static/test/escript.pp"
+        puppet="http://localhost:5000/static/puppet/escript.pp"
     )
     escript_solution = create_solution(
         name="escript magnetic",
         description="3D magnetic inversion example using netCDF data.",
         author=user,
         problem=escript_problem,
-        template="http://localhost:5000/scm/static/test/escript.py"
+        template="http://localhost:5000/static/templates/escript.py"
     )
     # Solution variables
     Var.create(

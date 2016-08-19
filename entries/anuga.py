@@ -20,7 +20,7 @@ def create(user):
             type="svn",
             url="https://anuga.anu.edu.au/svn/anuga/trunk/anuga_core/"
         ),
-        puppet="http://localhost:5000/static/test/anuga.pp"
+        puppet="http://localhost:5000/static/puppet/anuga.pp"
     )
 
     index_entry(anuga_toolbox)
@@ -31,7 +31,7 @@ def create(user):
         author=user,
         problem=anuga_problem,
         homepage="https://github.com/GeoscienceAustralia/tcrm",
-        template="http://localhost:5000/scm/static/test/anuga.py"
+        template="http://localhost:5000/static/templates/anuga.py"
         )
 
     Var.create(type="int",

@@ -3,8 +3,11 @@
 from models import db, User, Problem, Solution, Toolbox, Dependency, Var, \
     Source, ToolboxDependency, SolutionDependency, SolutionToolbox, \
     ToolboxToolbox, License, create_database, drop_tables, index_entry
+from security import user_datastore
 
-
+BOOTSTRAP_USER = dict(email='geoffrey.squire@csiro.au',
+                      password='password',
+                      name='Geoff Squire')
 
 def bootstrap():
     db.connect()
@@ -12,13 +15,12 @@ def bootstrap():
 
     create_database(db)
 
-    user_datastore.create_user(email='geoffrey.squire@csiro.au',
-                               password='password',
-                               name='Geoff Squire')
-    user = User.get(email="geoffrey.squire@csiro.au")
+    user_datastore.create_user(**BOOTSTRAP_USER)
 
-    # close the connection in case this is called from outside the main app
+    # close the connection in case this is called from outside the main app,
+    # and return the created user identification.
     db.close()
+    return dict([(k, BOOTSTRAP_USER[k]) for k in ['email']])
 
 def create_entry(cls, **kwargs):
     """Create catalogue entry and add it to the text index, then return it.

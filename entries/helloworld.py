@@ -23,7 +23,7 @@ def create(user):
         name="Print with Python",
         description="Print something using Python",
         author=user,
-        template="http://localhost:5000/scm/static/test/helloworld.py",
+        template="http://localhost:5000/static/templates/helloworld.py",
         problem=hwproblem
     )
     Var.create(solution=hwsolution,
