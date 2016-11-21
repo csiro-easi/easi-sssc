@@ -184,7 +184,7 @@ class JsonField(CharField):
 
     def python_value(self, value):
         """Return python data structure from json string in the db."""
-        if value is not None:
+        if value is not None and value != '':
             return json.loads(value)
 
 
@@ -212,6 +212,7 @@ class Var(BaseModel):
     step = DoubleField(null=True)
     values = JsonField(null=True)
     solution = ForeignKeyField(Solution, related_name="variables")
+    toolbox = ForeignKeyField(Toolbox, related_name="variables")
 
     def __unicode__(self):
         return "var {} ({})".format(self.name, self.type)

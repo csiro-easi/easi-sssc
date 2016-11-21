@@ -254,6 +254,12 @@ class SolutionView(EntryView):
                                          'default', 'min', 'max',
                                          'step', 'values'])
                           for v in entry.variables],
+            'dependencies': [properties(dep, [
+                'type',
+                'name',
+                'version',
+                'path'])
+                for dep in entry.depends_on],
             # Include prov info
             '@type': 'prov:Plan'
         })
@@ -274,7 +280,18 @@ class ToolboxView(EntryView):
             'source': properties(entry.source, ['type', 'url', 'checkout',
                                                 'exec']),
             'images': [properties(img, ['provider', 'image_id', 'sc_path'])
-                       for img in entry.images]
+                       for img in entry.images],
+            'variables': [properties(v, ['name', 'type', 'label',
+                                         'description', 'optional',
+                                         'default', 'min', 'max',
+                                         'step', 'values'])
+                          for v in entry.variables],
+            'dependencies': [properties(dep, [
+                'type',
+                'name',
+                'version',
+                'path'])
+                for dep in entry.depends_on]
         })
         return d
 

@@ -33,6 +33,30 @@
 </div>
 
 <div class="panel panel-default">
+    <div class="panel-heading"><h2 class="panel-title">Inputs</h2></div>
+    <div class="panel-body">
+        <table class="table table-hover">
+            <tr>
+                <th>Label</th>
+                <th>Type</th>
+                <th>Placeholder</th>
+                <th>Default</th>
+                <th>Optional</th>
+            </tr>
+            {% for v in entry.variables %}
+            <tr>
+                <td>{{ v.label }}</td>
+                <td>{{ v.type }}</td>
+                <td>{{ v.name }}</td>
+                <td>{{ v.default }}</td>
+                <td>{% if v.optional %}<span class="glyphicon glyphicon-ok"></span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+
+<div class="panel panel-default">
   <div class="panel-heading"><h2 class="panel-title">Dependent solutions</h2></div>
   <div class="panel-body">
     <ul>
