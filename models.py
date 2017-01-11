@@ -189,7 +189,7 @@ class JsonField(CharField):
 
 
 class Var(BaseModel):
-    """Variable in a Solution template.
+    """Variable in a Solution template or Toolbox instance.
 
     name -- Placeholder name in the template
     label -- User friendly label
@@ -211,8 +211,8 @@ class Var(BaseModel):
     max = DoubleField(null=True)
     step = DoubleField(null=True)
     values = JsonField(null=True)
-    solution = ForeignKeyField(Solution, related_name="variables")
-    toolbox = ForeignKeyField(Toolbox, related_name="variables")
+    solution = ForeignKeyField(Solution, related_name="variables", null=True)
+    toolbox = ForeignKeyField(Toolbox, related_name="variables", null=True)
 
     def __unicode__(self):
         return "var {} ({})".format(self.name, self.type)
