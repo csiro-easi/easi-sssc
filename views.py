@@ -6,9 +6,8 @@ from app import app
 from models import db, Toolbox, Entry, Problem, Solution, text_search, User
 from werkzeug.exceptions import NotAcceptable
 from peewee import SelectQuery
-from rdflib import Graph, plugin, URIRef, Literal, BNode, Namespace
+from rdflib import Graph, URIRef, Namespace
 from rdflib.namespace import RDF
-from rdflib.serializer import Serializer
 
 PROV = Namespace("http://www.w3.org/ns/prov#")
 
