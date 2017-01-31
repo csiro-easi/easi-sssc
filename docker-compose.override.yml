@@ -1,0 +1,12 @@
+version: '2.1'
+services:
+  web:
+    build: .
+    ports:
+      - 5000:5000
+    volumes:
+      - .:/app
+    environment:
+      - DEBUG=true
+    entrypoint: python
+    command: main.py

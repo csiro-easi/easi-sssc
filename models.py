@@ -16,7 +16,7 @@ SOURCE_TYPES = (('git', 'GIT repository'),
 # Types of external dependencies we can resolve
 DEPENDENCY_TYPES = (('puppet', 'Puppet module from forge-style repository'),
                     ('requirements', 'Requirements file with python packages from pypi'),
-                    ('python', 'Python package from pypi')
+                    ('python', 'Python package from pypi'),
                     ('hpc', 'HPC style module for Raijin and similar systems'))
 
 # Variable types for solutions
