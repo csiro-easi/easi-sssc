@@ -57,11 +57,31 @@
 </div>
 
 <div class="panel panel-default">
-  <div class="panel-heading"><h2 class="panel-title">Dependent solutions</h2></div>
+    <div class="panel-heading"><h2 class="panel-title">Puppet template</h2></div>
+    <div class="panel-body template-source">
+    </div>
+</div>
+
+
+
+<div class="panel panel-default">
+    <div class="panel-heading"><h2 class="panel-title">Images</h2></div>
+    <div class="panel-body">
+        <table class="table table-hover">
+            <tr><th>ID</th><th>Provider</th></tr>
+            {% for img in entry.images %}
+            <tr><td>{{ img.image_id }}</td><td>{{ img.provider }}</td></tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+
+<div class="panel panel-default">
+  <div class="panel-heading"><h2 class="panel-title">Solutions using this Toolbox</h2></div>
   <div class="panel-body">
     <ul>
       {% for d in entry.solutions %}
-      <li><a href="{{ entry_url(d) }}">{{ d.name }}</a></li>
+      <li><a href="{{ entry_url(d.solution) }}">{{ d.solution.name }}</a></li>
       {% endfor %}
     </ul>
   </div>
@@ -69,4 +89,10 @@
 
 {{ super() }}
 
+{% endblock %}
+
+{% block js_footer %}
+{% if entry.puppet %}
+<script type="text/javascript">show_toolbox_template("{{entry.puppet}}");</script>
+{% endif %}
 {% endblock %}

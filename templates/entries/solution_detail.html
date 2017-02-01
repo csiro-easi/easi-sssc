@@ -63,8 +63,19 @@
   </div>
 </div>
 
-{# Include dependencies last #}
 {% include 'entries/dependencies.html' %}
+
+<div class="panel panel-default">
+    <div class="panel-heading"><h2 class="panel-title">Images</h2></div>
+    <div class="panel-body">
+        <table>
+            <tr><th>ID</th><th>Provider</th></tr>
+            {% for img in entry.images %}
+            <tr><td>{{ img.image_id }}</td><td>{{ img.provider }}</td></tr>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
 
 {% endblock %}
 

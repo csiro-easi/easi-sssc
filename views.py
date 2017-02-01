@@ -210,12 +210,6 @@ class EntryView(MethodView):
                                'version', 'keywords', ('author.name', 'author')])
         d['uri'] = entry_url(entry)
         d['@id'] = entry_url(entry)
-        if 'depends_on' in vars(entry):
-            d['dependencies'] = [properties(dep, ['type', 'name', 'version',
-                                                  'path'])
-                                 for dep in entry.depends_on]
-        else:
-            d['dependencies'] = []
 
         # Add prov info and return
         d['@type'] = ['prov:Entity']
@@ -254,12 +248,9 @@ class SolutionView(EntryView):
                                          'default', 'min', 'max',
                                          'step', 'values'])
                           for v in entry.variables],
-            'dependencies': [properties(dep, [
-                'type',
-                'name',
-                'version',
-                'path'])
-                for dep in entry.depends_on],
+            'images': [properties(img, ['provider', 'image_id'])
+                       for img in entry.images],
+            'dependencies': dependencies,
             # Include prov info
             '@type': 'prov:Plan'
         })
@@ -279,7 +270,7 @@ class ToolboxView(EntryView):
             'license': properties(entry.license, ['name', 'url']),
             'source': properties(entry.source, ['type', 'url', 'checkout',
                                                 'exec']),
-            'images': [properties(img, ['provider', 'image_id', 'sc_path'])
+            'images': [properties(img, ['provider', 'image_id'])
                        for img in entry.images],
             'variables': [properties(v, ['name', 'type', 'label',
                                          'description', 'optional',

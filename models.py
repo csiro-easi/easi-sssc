@@ -162,6 +162,16 @@ class Source(BaseModel):
         return "source ({}, {})".format(self.type, self.url)
 
 
+class Image(BaseModel):
+    """Image/snapshot at a provider.
+
+    provider -- Cloud (or other) provider of this image
+    image_id -- Identifier for this image
+    """
+    provider = CharField()
+    image_id = CharField()
+
+
 class Toolbox(Entry):
     homepage = CharField(null=True)
     license = ForeignKeyField(License, related_name="toolboxes")
@@ -169,6 +179,10 @@ class Toolbox(Entry):
     puppet = CharField(
         null=True,
         help_text="URL of a Puppet script that will instantiate this Toolbox."
+    )
+    command = CharField(
+        null=True,
+        help_text="Command line template for executing a Solution using this Toolbox."
     )
 
 
@@ -184,6 +198,14 @@ class ToolboxToolbox(BaseModel):
     dependency = ForeignKeyField(Toolbox)
 
 
+class ToolboxImage(Image):
+    """Image/snapshot published at a provider that instantiates a Toolbox.
+
+    toolbox -- Toolbox that this Image provides
+    """
+    toolbox = ForeignKeyField(Toolbox, related_name="images")
+
+
 class Solution(Entry):
     problem = ForeignKeyField(Problem, related_name="solutions")
     template = CharField()
@@ -197,7 +219,16 @@ class SolutionDependency(BaseModel):
 
 class SolutionToolbox(BaseModel):
     solution = ForeignKeyField(Solution, related_name="toolboxes")
-    dependency = ForeignKeyField(Toolbox)
+    dependency = ForeignKeyField(Toolbox, related_name="solutions")
+
+
+class SolutionImage(Image):
+    """Image/snapshot that provides a pre-canned environment for a Solution.
+
+
+    solution -- Solution provided by this Image
+    """
+    solution = ForeignKeyField(Solution, related_name="images")
 
 
 class JsonField(CharField):

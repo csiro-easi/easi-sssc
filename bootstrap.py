@@ -15,7 +15,10 @@ def bootstrap():
 
     create_database(db)
 
-    user_datastore.create_user(**BOOTSTRAP_USER)
+    # Create a sample user and bootstrap entries
+    user = user_datastore.create_user(**BOOTSTRAP_USER)
+    import entries.escript
+    entries.escript.create(user)
 
     # close the connection in case this is called from outside the main app,
     # and return the created user identification.
