@@ -17,5 +17,7 @@
 {% endblock %}
 
 {% block js_footer %}
+{{ super() }}
+
 <script type="text/javascript">show_entry_json("{{entry_url(entry)}}");</script>
 {% endblock %}

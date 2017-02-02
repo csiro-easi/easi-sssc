@@ -68,7 +68,7 @@
 <div class="panel panel-default">
     <div class="panel-heading"><h2 class="panel-title">Images</h2></div>
     <div class="panel-body">
-        <table>
+        <table class="table table-hover">
             <tr><th>ID</th><th>Provider</th></tr>
             {% for img in entry.images %}
             <tr><td>{{ img.image_id }}</td><td>{{ img.provider }}</td></tr>
@@ -80,5 +80,7 @@
 {% endblock %}
 
 {% block js_footer %}
+{{ super() }}
+
 <script type="text/javascript">show_solution_template("{{entry.template}}");</script>
 {% endblock %}

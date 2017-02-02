@@ -11,19 +11,30 @@
  * tfn -- optional function to transform the data for
  */
 function show_code(url, selector, brush) {
+  // Capture the optional function arg.
+  var argfn = arguments[3];
+
+  // Default tfn applies argfn if supplied, then escapes characters for display.
+  var tfn = function(text) {
+    var newtext = text;
+
+    if (argfn) {
+      newtext = argfn(newtext);
+    }
+
+    return newtext.replace("<", "&lt;");
+  };
+
   $.get(url,
         function(data) {
-          var text = data;
-          if (arguments.length > 3) {
-            text = arguments[3](text);
-          }
+          var text = tfn(data);
 
-          var code = $('<script type="text/syntaxhighlighter" class="brush: ' + brush + '">')
+          var code = $('<pre type="syntaxhighlighter" class="brush: ' + brush + '">')
               .text(text);
           $(selector).append(code);
           SyntaxHighlighter.highlight(null, code[0]);
         },
-        "script");
+        "text");
 }
 
 /**

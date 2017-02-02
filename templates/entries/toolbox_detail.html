@@ -92,6 +92,8 @@
 {% endblock %}
 
 {% block js_footer %}
+{{ super() }}
+
 {% if entry.puppet %}
 <script type="text/javascript">show_toolbox_template("{{entry.puppet}}");</script>
 {% endif %}
