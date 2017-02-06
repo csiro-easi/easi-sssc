@@ -150,13 +150,13 @@ class Source(BaseModel):
     type -- Repository type (git, svn)
     url -- Repository url
     checkout -- Branch/tag to checkout (default 'master' for git)
-    exec -- Optional setup script
+    setup -- Optional setup script
 
     """
     type = CharField(choices=SOURCE_TYPES)
     url = CharField()
     checkout = CharField(null=True)
-    exec = TextField(null=True)
+    setup = TextField(null=True)
 
     def __unicode__(self):
         return "source ({}, {})".format(self.type, self.url)
@@ -173,6 +173,9 @@ class Image(BaseModel):
 
 
 class Toolbox(Entry):
+    """Environment for running a specific model or software package.
+
+    """
     homepage = CharField(null=True)
     license = ForeignKeyField(License, related_name="toolboxes")
     source = ForeignKeyField(Source, null=True, related_name="toolboxes")

@@ -269,7 +269,7 @@ class ToolboxView(EntryView):
             'homepage': entry.homepage,
             'license': properties(entry.license, ['name', 'url']),
             'source': properties(entry.source, ['type', 'url', 'checkout',
-                                                'exec']),
+                                                'setup']),
             'images': [properties(img, ['provider', 'image_id'])
                        for img in entry.images],
             'variables': [properties(v, ['name', 'type', 'label',
