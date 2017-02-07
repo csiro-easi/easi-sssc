@@ -76,11 +76,15 @@ def create(user):
         description="The Tropical Cyclone Risk Model is a stochastic tropical cyclone model developed by [Geoscience Australia](http://www.ga.gov.au) for estimating the wind hazard from tropical cyclones.",
         author=user,
         homepage="https://github.com/GeoscienceAustralia/tcrm",
-        license=License.create(url="https://github.com/GeoscienceAustralia/tcrm/blob/master/LICENSE"),
-        source=Source.create(type="git",
-                         url="https://github.com/GeoscienceAustralia/tcrm.git",
-                         checkout="v1.0rc1",
-                             exec="python installer/setup.py build_ext -i"),
+        license=License.create(
+            url="https://github.com/GeoscienceAustralia/tcrm/blob/master/LICENSE"
+        ),
+        source=Source.create(
+            type="git",
+            url="https://github.com/GeoscienceAustralia/tcrm.git",
+            checkout="v1.0rc1",
+            setup="python installer/setup.py build_ext -i"
+        ),
         puppet="http://localhost:5000/static/test/tcrm.pp"
     )
 
