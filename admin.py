@@ -1,8 +1,8 @@
 from flask import abort, redirect, request, url_for
-from flask.ext.admin import Admin, helpers as admin_helpers
-from flask.ext.admin.contrib.peewee import ModelView
-from flask.ext.admin.contrib.peewee.form import CustomModelConverter
-from flask.ext.security import current_user
+from flask_admin import Admin, helpers as admin_helpers
+from flask_admin.contrib.peewee import ModelView
+from flask_admin.contrib.peewee.form import CustomModelConverter
+from flask_security import current_user
 from wtforms import fields
 from app import app
 from security import security

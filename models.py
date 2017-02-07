@@ -3,7 +3,7 @@ from peewee import *
 # Use the ext database to get FTS support
 # from peewee import SqliteDatabase
 from playhouse.sqlite_ext import FTSModel, SqliteExtDatabase
-from flask.ext.security import UserMixin, RoleMixin
+from flask_security import UserMixin, RoleMixin
 import datetime
 import importlib
 from app import app
