@@ -20,11 +20,11 @@ def create(user):
         license=License.get_or_create(
             name="Apache License, version 2.0",
             url="http://www.apache.org/licenses/LICENSE-2.0"
-        ),
+        )[0],
         source=Source.get_or_create(
             type="svn",
             url="https://svn.geocomp.uq.edu.au/svn/esys13"
-        ),
+        )[0],
         puppet="http://localhost:5000/static/puppet/escript.pp"
     )
     escript_solution = create_solution(

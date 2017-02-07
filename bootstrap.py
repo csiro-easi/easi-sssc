@@ -1,8 +1,6 @@
 # coding: utf-8
 
-from models import db, User, Problem, Solution, Toolbox, Dependency, Var, \
-    Source, ToolboxDependency, SolutionDependency, SolutionToolbox, \
-    ToolboxToolbox, License, create_database, drop_tables, index_entry
+from models import db, Problem, Solution, Toolbox, Dependency, ToolboxDependency, SolutionDependency, create_database, drop_tables, index_entry
 from security import user_datastore
 
 BOOTSTRAP_USER = dict(email='geoffrey.squire@csiro.au',
@@ -54,7 +52,7 @@ def solution_dep(solution, **args):
     """
     return SolutionDependency.create(
         solution=solution,
-        dependency=Dependency.get_or_create(**args)
+        dependency=Dependency.get_or_create(**args)[0]
     )
 
 def toolbox_dep(toolbox, **args):
@@ -69,5 +67,5 @@ def toolbox_dep(toolbox, **args):
     """
     return ToolboxDependency.create(
         toolbox=toolbox,
-        dependency=Dependency.get_or_create(**args)
+        dependency=Dependency.get_or_create(**args)[0]
     )

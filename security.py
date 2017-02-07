@@ -1,4 +1,4 @@
-from flask.ext.security import PeeweeUserDatastore, Security
+from flask_security import PeeweeUserDatastore, Security
 from app import app
 from models import db, User, Role, UserRoles
 
