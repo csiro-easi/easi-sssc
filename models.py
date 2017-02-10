@@ -1,5 +1,7 @@
 from flask import json
-from peewee import *
+from peewee import BooleanField, CharField, CompositeKey, DateTimeField, \
+    DoubleField, ForeignKeyField, IntegerField, Model, PrimaryKeyField, \
+    TextField
 # Use the ext database to get FTS support
 # from peewee import SqliteDatabase
 from playhouse.sqlite_ext import FTSModel, SqliteExtDatabase
@@ -36,15 +38,19 @@ RUNTIME_CHOICES = (('python2', 'Latest Python 2.x'),
                    ('python3', 'Latest Python 3.x'),
                    ('python', 'Latest Python 2 or 3'))
 
+
 def text_search(text):
     """Search for entries that match text.
 
     Returns a list of entries that matched text.
 
     """
-    matches = [r.problem for r in ProblemIndex.select().where(ProblemIndex.match(text))]
-    matches.extend([r.solution for r in SolutionIndex.select().where(SolutionIndex.match(text))])
-    matches.extend([r.toolbox for r in ToolboxIndex.select().where(ToolboxIndex.match(text))])
+    matches = [r.problem for r in
+               ProblemIndex.select().where(ProblemIndex.match(text))]
+    matches.extend([r.solution for r in
+                    SolutionIndex.select().where(SolutionIndex.match(text))])
+    matches.extend([r.toolbox for r in
+                    ToolboxIndex.select().where(ToolboxIndex.match(text))])
     return matches
 
 
@@ -53,7 +59,7 @@ class BaseModel(Model):
         database = db
 
 
-class Role(BaseModel):
+class Role(BaseModel, RoleMixin):
     """Auth role"""
     name = CharField(unique=True)
     description = TextField(null=True)
@@ -194,6 +200,9 @@ class ToolboxDependency(BaseModel):
     toolbox = ForeignKeyField(Toolbox, related_name="dependencies")
     dependency = ForeignKeyField(Dependency)
 
+    class Meta:
+        primary_key = CompositeKey('toolbox', 'dependency')
+
 
 class ToolboxToolbox(BaseModel):
     """Toolbox dependencies for Toolboxes."""
@@ -272,11 +281,19 @@ class Var(BaseModel):
     max = DoubleField(null=True)
     step = DoubleField(null=True)
     values = JsonField(null=True)
-    solution = ForeignKeyField(Solution, related_name="variables", null=True)
-    toolbox = ForeignKeyField(Toolbox, related_name="variables", null=True)
 
     def __unicode__(self):
         return "var {} ({})".format(self.name, self.type)
+
+
+class SolutionVar(Var):
+    """Variable in a Solution."""
+    solution = ForeignKeyField(Solution, related_name="variables")
+
+
+class ToolboxVar(Var):
+    """Variable in a Toolbox"""
+    toolbox = ForeignKeyField(Toolbox, related_name="variables")
 
 
 class BaseIndexModel(FTSModel):
@@ -309,14 +326,15 @@ def index_entry(entry):
                   entry_type + 'Index')
     if cls:
         obj = cls(name=entry.name, description=entry.description)
-        field = entry_type[0].lower() + entry_type[1:]
+        field = entry_type.lower()
         setattr(obj, field, entry)
         obj.save()
 
 
-_TABLES = [User, Role, UserRoles, License, Dependency, Problem, Toolbox, ToolboxDependency,
-           ToolboxToolbox, Solution, SolutionDependency, SolutionToolbox, Var,
-           Source]
+_TABLES = [User, Role, UserRoles, License, Dependency, Problem, Toolbox,
+           ToolboxDependency, ToolboxToolbox, Solution, SolutionDependency,
+           SolutionToolbox, ToolboxVar, SolutionVar, Source, SolutionImage,
+           ToolboxImage]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 
 

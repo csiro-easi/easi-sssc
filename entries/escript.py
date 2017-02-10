@@ -1,8 +1,6 @@
-from models import Problem, Solution, Toolbox, Dependency, Var, Source, \
-    ToolboxDependency, SolutionDependency, ToolboxToolbox, SolutionToolbox, \
-    License
+from models import SolutionVar, Source, SolutionToolbox, License
 from bootstrap import create_problem, create_toolbox, create_solution, \
-    solution_dep, toolbox_dep
+    toolbox_dep
 
 
 def create(user):
@@ -35,14 +33,14 @@ def create(user):
         template="http://localhost:5000/static/templates/escript.py"
     )
     # Solution variables
-    Var.create(
+    SolutionVar.create(
         solution=escript_solution,
         type="file",
         name="inversion-file",
         label="Inversion file",
         description="Input dataset"
     )
-    Var.create(
+    SolutionVar.create(
         solution=escript_solution,
         default=29800,
         description="Background magnetic flux density in nano Tesla. Values for Australia can be calculated at the <a href=\"http://www.ga.gov.au/oracle/geomag/agrfform.jsp\" target=\"_blank\">Geoscience Australia website</a>'",
@@ -51,7 +49,7 @@ def create(user):
         optional=False,
         type="int"
     )
-    Var.create(
+    SolutionVar.create(
         solution=escript_solution,
         default=2780,
         description="Background magnetic flux density in nano Tesla. Values for Australia can be calculated at the <a href=\"http://www.ga.gov.au/oracle/geomag/agrfform.jsp\" target=\"_blank\">Geoscience Australia website</a>'",
@@ -60,7 +58,7 @@ def create(user):
         optional=False,
         type="int"
     )
-    Var.create(
+    SolutionVar.create(
         solution=escript_solution,
         default=-44000,
         description="Background magnetic flux density in nano Tesla. Values for Australia can be calculated at the <a href=\"http://www.ga.gov.au/oracle/geomag/agrfform.jsp\" target=\"_blank\">Geoscience Australia website</a>'",
@@ -69,7 +67,7 @@ def create(user):
         optional=False,
         type="int"
     )
-    Var.create(
+    SolutionVar.create(
         solution=escript_solution,
         default=40000,
         description="Maximum depth of the inversion, in meters.",
@@ -78,7 +76,7 @@ def create(user):
         optional=False,
         type="double"
     )
-    Var.create(
+    SolutionVar.create(
         solution=escript_solution,
         default=6000,
         description="Buffer zone above data, in meters, 6-10km recommended.",
@@ -87,7 +85,7 @@ def create(user):
         optional=False,
         type="double"
     )
-    Var.create(
+    SolutionVar.create(
         solution=escript_solution,
         default=25,
         description="Number of mesh elements in vertical direction (~1 element per 2km recommended).",
@@ -96,7 +94,7 @@ def create(user):
         optional=False,
         type="int"
     )
-    Var.create(
+    SolutionVar.create(
         solution=escript_solution,
         default=0.2,
         description="Amount of horizontal padding in the x-direction. This affects end result, about 20% recommended.",
@@ -108,7 +106,7 @@ def create(user):
         step=0.1,
         type="double"
     )
-    Var.create(
+    SolutionVar.create(
         solution=escript_solution,
         default=0.2,
         description="Amount of horizontal padding in the y-direction. This affects end result, about 20% recommended.",
@@ -120,7 +118,7 @@ def create(user):
         step=0.1,
         type="double"
     )
-    Var.create(
+    SolutionVar.create(
         solution=escript_solution,
         default=1,
         description="Maximum threads (min. 1).",

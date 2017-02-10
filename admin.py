@@ -6,7 +6,9 @@ from flask_security import current_user
 from wtforms import fields
 from app import app
 from security import security
-from models import User, Problem, Solution, Toolbox, Dependency, SolutionToolbox, SolutionDependency, ToolboxToolbox, ToolboxDependency, Var, JsonField
+from models import User, Problem, Solution, Toolbox, Dependency, \
+    SolutionToolbox, SolutionDependency, ToolboxToolbox, ToolboxDependency, \
+    SolutionVar, ToolboxVar, JsonField
 
 admin = Admin(app)
 
@@ -47,11 +49,11 @@ class ProblemAdmin(ProtectedModelView):
 
 class SolutionAdmin(ProtectedModelView):
     model_form_converter = VarValuesConverter
-    inline_models = (SolutionDependency, SolutionToolbox, Var)
+    inline_models = (SolutionDependency, SolutionToolbox, SolutionVar)
 
 
 class ToolboxAdmin(ProtectedModelView):
-    inline_models = (ToolboxDependency, ToolboxToolbox)
+    inline_models = (ToolboxDependency, ToolboxToolbox, ToolboxVar)
 
 
 # admin.add_view(UserAdmin(User))
