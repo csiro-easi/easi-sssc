@@ -17,9 +17,12 @@ SOURCE_TYPES = (('git', 'GIT repository'),
 
 # Types of external dependencies we can resolve
 DEPENDENCY_TYPES = (('puppet', 'Puppet module from forge-style repository'),
-                    ('requirements', 'Requirements file with python packages from pypi'),
+                    ('requirements',
+                     'Requirements file with python packages from pypi'),
                     ('python', 'Python package from pypi'),
-                    ('hpc', 'HPC style module for Raijin and similar systems'))
+                    ('hpc', 'HPC style module for Raijin and similar systems'),
+                    ('toolbox',
+                     'A Toolbox in this, or another, solution centre'))
 
 # Variable types for solutions
 VARIABLE_TYPES = (('int', 'Integer'),
@@ -195,13 +198,9 @@ class Toolbox(Entry):
     )
 
 
-class ToolboxDependency(BaseModel):
+class ToolboxDependency(Dependency):
     """External dependencies for Toolboxes."""
     toolbox = ForeignKeyField(Toolbox, related_name="dependencies")
-    dependency = ForeignKeyField(Dependency)
-
-    class Meta:
-        primary_key = CompositeKey('toolbox', 'dependency')
 
 
 class ToolboxToolbox(BaseModel):
@@ -224,9 +223,8 @@ class Solution(Entry):
     runtime = CharField(choices=RUNTIME_CHOICES, default="python")
 
 
-class SolutionDependency(BaseModel):
+class SolutionDependency(Dependency):
     solution = ForeignKeyField(Solution, related_name="dependencies")
-    dependency = ForeignKeyField(Dependency)
 
 
 class SolutionToolbox(BaseModel):
@@ -331,7 +329,7 @@ def index_entry(entry):
         obj.save()
 
 
-_TABLES = [User, Role, UserRoles, License, Dependency, Problem, Toolbox,
+_TABLES = [User, Role, UserRoles, License, Problem, Toolbox,
            ToolboxDependency, ToolboxToolbox, Solution, SolutionDependency,
            SolutionToolbox, ToolboxVar, SolutionVar, Source, SolutionImage,
            ToolboxImage]

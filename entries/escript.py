@@ -1,6 +1,6 @@
-from models import SolutionVar, Source, SolutionToolbox, License
-from bootstrap import create_problem, create_toolbox, create_solution, \
-    toolbox_dep
+from models import SolutionVar, Source, SolutionToolbox, License, \
+    ToolboxDependency
+from bootstrap import create_problem, create_toolbox, create_solution
 
 
 def create(user):
@@ -131,7 +131,15 @@ def create(user):
     # Dependencies
     SolutionToolbox.create(solution=escript_solution,
                            dependency=escript_toolbox)
-    toolbox_dep(escript_toolbox, type="puppet", identifier="stahnma/epel")
-    toolbox_dep(escript_toolbox, type="puppet", identifier="example42/puppi")
-    toolbox_dep(escript_toolbox, type="puppet", identifier="jhoblitt/autofsck")
-    toolbox_dep(escript_toolbox, type="puppet", identifier="puppetlabs/stdlib")
+    ToolboxDependency.create(toolbox=escript_toolbox,
+                             type="puppet",
+                             identifier="stahnma/epel")
+    ToolboxDependency.create(toolbox=escript_toolbox,
+                             type="puppet",
+                             identifier="example42/puppi")
+    ToolboxDependency.create(toolbox=escript_toolbox,
+                             type="puppet",
+                             identifier="jhoblitt/autofsck")
+    ToolboxDependency.create(toolbox=escript_toolbox,
+                             type="puppet",
+                             identifier="puppetlabs/stdlib")

@@ -2,12 +2,9 @@
     <div class="panel-heading"><h2 class="panel-title">Dependencies</h2></div>
     <div class="panel-body">
     <ul>
-        {% for ed in entry.dependencies %}
-        {% with %}
-        {% set d = ed.dependency %}
+        {% for d in entry.dependencies %}
         <li class="dep-{{d.type}}">{{ d.identifier }}{% if d.version %}=={{ d.version }}{% endif %}{% if d.repository %} ({{ d.repository }}){% endif %}</li>
-        {% endwith %}
-      {% endfor %}
+        {% endfor %}
     </ul>
   </div>
 </div>

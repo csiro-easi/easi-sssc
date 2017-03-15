@@ -207,7 +207,8 @@ class EntryView(MethodView):
 
     def for_api(self, entry):
         d = properties(entry, ['id', 'name', 'description', 'created_at',
-                               'version', 'keywords', ('author.name', 'author')])
+                               'version', 'keywords',
+                               ('author.name', 'author')])
         d['uri'] = entry_url(entry)
         d['@id'] = entry_url(entry)
 
@@ -236,8 +237,8 @@ class SolutionView(EntryView):
         problem.update({'uri': entry_url(entry.problem)})
         problem.update({'@id': entry_url(entry.problem)})
         toolboxes = [entry_url(t.dependency) for t in entry.toolboxes]
-        dependencies = [properties(d.dependency, ['type', 'identifier',
-                                                  'version', 'repository'])
+        dependencies = [properties(d, ['type', 'identifier',
+                                       'version', 'repository'])
                         for d in entry.dependencies]
         d.update({
             'problem': problem,
@@ -278,9 +279,10 @@ class ToolboxView(EntryView):
                                          'step', 'values'])
                           for v in entry.variables],
             'puppet': entry.puppet,
+            'command': entry.command,
             'toolboxes': [entry_url(t.dependency) for t in entry.toolboxes],
-            'dependencies': [properties(d.dependency, ['type', 'identifier',
-                                                       'version', 'repository'])
+            'dependencies': [properties(d, ['type', 'identifier',
+                                            'version', 'repository'])
                              for d in entry.dependencies]
         })
         return d

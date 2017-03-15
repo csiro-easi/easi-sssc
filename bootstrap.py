@@ -46,35 +46,3 @@ def create_toolbox(**kwargs):
 
 def create_solution(**kwargs):
     return create_entry(Solution, **kwargs)
-
-
-def solution_dep(solution, **args):
-    """Create and return a new SolutionDependency(solution, Dependency(**args)).
-
-    If a Dependency exists in the database that matches args, it will be used.
-    Otherwise a new Dependency will be created in the database, and linked to
-    solution.
-
-    See models.Dependency for a description of valid args.
-
-    """
-    return SolutionDependency.create(
-        solution=solution,
-        dependency=Dependency.get_or_create(**args)[0]
-    )
-
-
-def toolbox_dep(toolbox, **args):
-    """Create and return a new ToolboxDependency(toolbox, Dependency(**args))
-
-    If a Dependency exists in the database that matches args, it will be used.
-    Otherwise a new Dependency will be created in the database, and linked to
-    toolbox.
-
-    See models.Dependency for a description of valid args.
-
-    """
-    return ToolboxDependency.create(
-        toolbox=toolbox,
-        dependency=Dependency.get_or_create(**args)[0]
-    )

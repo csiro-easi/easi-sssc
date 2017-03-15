@@ -61,6 +61,7 @@ admin.add_view(ProblemAdmin(Problem))
 admin.add_view(SolutionAdmin(Solution))
 admin.add_view(ToolboxAdmin(Toolbox))
 
+
 # Integrate flask-admin and flask-security
 @security.context_processor
 def security_context_processor():

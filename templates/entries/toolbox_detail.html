@@ -56,13 +56,20 @@
     </div>
 </div>
 
+{% if entry.command %}
+<div class="panel panel-default">
+    <div class="panel-heading"><h2 class="panel-title">Run command</h2></div>
+    <div class="panel-body">
+        {{ entry.command }}
+    </div>
+</div>
+{% endif %}
+
 <div class="panel panel-default">
     <div class="panel-heading"><h2 class="panel-title">Puppet template</h2></div>
     <div class="panel-body template-source">
     </div>
 </div>
-
-
 
 <div class="panel panel-default">
     <div class="panel-heading"><h2 class="panel-title">Images</h2></div>
