@@ -1,30 +1,31 @@
 # coding: utf-8
 
-from models import db, Problem, Solution, Toolbox, Dependency, \
-    ToolboxDependency, SolutionDependency, create_database, drop_tables, \
-    index_entry
-from security import user_datastore
-
-BOOTSTRAP_USER = dict(email='geoffrey.squire@csiro.au',
-                      password='password',
-                      name='Geoff Squire')
+from models import db, Problem, Solution, Toolbox,  drop_tables,  index_entry
+from security import user_datastore, user_role, admin_role, initialise_db
 
 
 def bootstrap():
     db.connect()
     drop_tables(db)
-
-    create_database(db)
+    initialise_db()
 
     # Create a sample user and bootstrap entries
-    user = user_datastore.create_user(**BOOTSTRAP_USER)
-    import entries.escript
-    entries.escript.create(user)
+    user1 = user_datastore.create_user(email='geoffrey.squire@csiro.au',
+                                       password='password',
+                                       name='Geoff Squire')
+    user_datastore.add_role_to_user(user1, admin_role)
+    user_datastore.add_role_to_user(user1, user_role)
 
-    # close the connection in case this is called from outside the main app,
-    # and return the created user identification.
+    user = user_datastore.create_user(email='josh.vote@csiro.au',
+                                      password='password',
+                                      name='Josh Vote')
+    user_datastore.add_role_to_user(user, user_role)
+
+    import entries.escript
+    entries.escript.create(user1)
+
+    # close the connection in case this is called from outside the main app
     db.close()
-    return dict([(k, BOOTSTRAP_USER[k]) for k in ['email']])
 
 
 def create_entry(cls, **kwargs):

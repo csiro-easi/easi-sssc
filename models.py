@@ -64,6 +64,7 @@ class BaseModel(Model):
 
 class Role(BaseModel, RoleMixin):
     """Auth role"""
+    id = PrimaryKeyField()
     name = CharField(unique=True)
     description = TextField(null=True)
 
@@ -89,7 +90,10 @@ class UserRoles(BaseModel):
     description = property(lambda self: self.role.description)
 
     class Meta:
-        primary_key = CompositeKey('user', 'role')
+        indexes = (
+            # user/role pairs should be unique
+            (('user', 'role'), True),
+        )
 
 
 class Entry(BaseModel):

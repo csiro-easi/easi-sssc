@@ -5,7 +5,7 @@ from flask_admin.contrib.peewee.form import CustomModelConverter
 from flask_security import current_user
 from wtforms import fields
 from app import app
-from security import security
+from security import security, is_admin, is_user
 from models import Problem, Solution, Toolbox, \
     SolutionDependency, ToolboxDependency, \
     SolutionVar, ToolboxVar, JsonField
@@ -23,9 +23,43 @@ class VarValuesConverter(CustomModelConverter):
 
 
 class ProtectedModelView(ModelView):
-    """Require login to access the admin views."""
+    """Limit access the admin views.
+
+    Require user to be authenticated to access these views at all.
+
+    Restrict the entries available for admin by a regular user to their own,
+    while allowing admin users to administer everything.
+
+    """
+    # Restrict access generally to active and authenticated users
     def is_accessible(self):
-        return current_user.is_active and current_user.is_authenticated
+        return (current_user.is_active and
+                current_user.is_authenticated and
+                is_user())
+
+    # If user does not have the 'admin' role, only allow them to administer
+    # their own views.
+    def get_query(self):
+        # Start with the default query
+        query = super().get_query()
+
+        # Limit results to those owned by a regular users
+        if not is_admin():
+            query = query.where(self.model._meta.fields['author'] ==
+                                current_user.id)
+
+        return query
+
+    def get_one(self, id):
+        # Default is to try to retrieve entry with id.
+        it = super().get_one(id)
+
+        # If we found the entry, throw not authorized if it's not for the
+        # current user and they're not at admin
+        if not is_admin() and (it.author.id != current_user.id):
+            abort(403)
+
+        return it
 
     def _handle_view(self, name, **kwargs):
         """Override to redirect users when a view is not accessible."""
