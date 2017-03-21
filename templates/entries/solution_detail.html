@@ -21,11 +21,13 @@
       <div class="panel-heading"><h2 class="panel-title">Toolboxes</h2></div>
       <div class="panel-body">
           <div class="list-group">
-              {% for t in entry.toolboxes %}
-              {% with %}
-              {% set entry = t.dependency %}
-              {% include 'entries/list-entry.html' %}
-              {% endwith %}
+              {% for t in entry.dependencies %}
+              {% if t.type == 'toolbox' %}
+              <a href="{{ t.identifier }}"
+                 class="list-group-item"> 
+                  {{t.identifier}}
+              </a>
+              {% endif %}
               {% endfor %}
           </div>
       </div>

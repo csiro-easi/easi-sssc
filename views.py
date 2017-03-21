@@ -236,13 +236,11 @@ class SolutionView(EntryView):
         problem = properties(entry.problem, ['id', 'name', 'description'])
         problem.update({'uri': entry_url(entry.problem)})
         problem.update({'@id': entry_url(entry.problem)})
-        toolboxes = [entry_url(t.dependency) for t in entry.toolboxes]
         dependencies = [properties(d, ['type', 'identifier',
                                        'version', 'repository'])
                         for d in entry.dependencies]
         d.update({
             'problem': problem,
-            'toolboxes': toolboxes,
             'template': entry.template,
             'variables': [properties(v, ['name', 'type', 'label',
                                          'description', 'optional',
@@ -280,7 +278,6 @@ class ToolboxView(EntryView):
                           for v in entry.variables],
             'puppet': entry.puppet,
             'command': entry.command,
-            'toolboxes': [entry_url(t.dependency) for t in entry.toolboxes],
             'dependencies': [properties(d, ['type', 'identifier',
                                             'version', 'repository'])
                              for d in entry.dependencies]
@@ -358,7 +355,8 @@ class EntriesView(MethodView):
     def listing(self, entry):
         # Return a dict view of entry
         d = properties(entry, ['id', 'name', 'description', 'version',
-                               'created_at', 'keywords', ('author.name', 'author')])
+                               'created_at', 'keywords', ('author.name',
+                                                          'author')])
         d.update({
             'type': self.entry_type,
             'uri': entry_url(entry),
@@ -400,12 +398,8 @@ class SolutionsView(EntriesView):
         problem = properties(entry.problem, ['id', 'name', 'description'])
         problem.update({'uri': entry_url(entry.problem)})
         problem.update({'@id': entry_url(entry.problem)})
-        toolboxes = [entry_url(t.dependency) for t in entry.toolboxes]
         d = super().listing(entry)
-        d.update({
-            'problem': problem,
-            'toolboxes': toolboxes
-        })
+        d.update(problem=problem)
         return d
 
 
@@ -474,9 +468,12 @@ class SolutionProvView(ProvView):
         triples = super().triples(entry)
         solution = entry_term(entry)
         triples.append((solution, RDF.type, PROV.Plan))
-        triples.extend([(solution, PROV.wasDerivedFrom, entry_term(t))
-                        for t in [entry.toolbox]])
-        triples.append((solution, PROV.wasDerivedFrom, entry_term(entry.problem)))
+        triples.extend([(solution, PROV.wasDerivedFrom, URIRef(t.identifier))
+                        for t in entry.dependencies
+                        if t.type == 'toolbox'])
+        triples.append((solution,
+                        PROV.wasDerivedFrom,
+                        entry_term(entry.problem)))
         return triples
 
 
@@ -518,7 +515,6 @@ site.add_url_rule('/solution/<int:entry_id>/prov',
                   view_func=SolutionProvView.as_view('solution_prov'))
 site.add_url_rule('/toolbox/<int:entry_id>/prov',
                   view_func=ToolboxProvView.as_view('toolbox_prov'))
-                 
 
 
 @site.route('/add/problem')

@@ -1,5 +1,5 @@
 from flask import json
-from peewee import BooleanField, CharField, CompositeKey, DateTimeField, \
+from peewee import BooleanField, CharField, DateTimeField, CompositeKey, \
     DoubleField, ForeignKeyField, IntegerField, Model, PrimaryKeyField, \
     TextField
 # Use the ext database to get FTS support
@@ -88,6 +88,9 @@ class UserRoles(BaseModel):
     name = property(lambda self: self.role.name)
     description = property(lambda self: self.role.description)
 
+    class Meta:
+        primary_key = CompositeKey('user', 'role')
+
 
 class Entry(BaseModel):
     """Base information shared by all entries.
@@ -129,6 +132,7 @@ class Dependency(BaseModel):
     repository attached.
 
     """
+    id = PrimaryKeyField()
     type = CharField(choices=DEPENDENCY_TYPES)
     identifier = CharField()
     version = CharField(null=True)
@@ -136,12 +140,6 @@ class Dependency(BaseModel):
 
     def __unicode__(self):
         return "({}) {}".format(self.type, self.identifier)
-
-    class Meta:
-        indexes = (
-            # Entries should be unique
-            (('type', 'identifier', 'version', 'repository'), True),
-        )
 
 
 class Problem(Entry):
@@ -194,19 +192,14 @@ class Toolbox(Entry):
     )
     command = CharField(
         null=True,
-        help_text="Command line template for executing a Solution using this Toolbox."
+        help_text=("Command line template for executing a Solution using this"
+                   " Toolbox.")
     )
 
 
 class ToolboxDependency(Dependency):
     """External dependencies for Toolboxes."""
     toolbox = ForeignKeyField(Toolbox, related_name="dependencies")
-
-
-class ToolboxToolbox(BaseModel):
-    """Toolbox dependencies for Toolboxes."""
-    toolbox = ForeignKeyField(Toolbox, related_name="toolboxes")
-    dependency = ForeignKeyField(Toolbox)
 
 
 class ToolboxImage(Image):
@@ -225,11 +218,6 @@ class Solution(Entry):
 
 class SolutionDependency(Dependency):
     solution = ForeignKeyField(Solution, related_name="dependencies")
-
-
-class SolutionToolbox(BaseModel):
-    solution = ForeignKeyField(Solution, related_name="toolboxes")
-    dependency = ForeignKeyField(Toolbox, related_name="solutions")
 
 
 class SolutionImage(Image):
@@ -330,8 +318,8 @@ def index_entry(entry):
 
 
 _TABLES = [User, Role, UserRoles, License, Problem, Toolbox,
-           ToolboxDependency, ToolboxToolbox, Solution, SolutionDependency,
-           SolutionToolbox, ToolboxVar, SolutionVar, Source, SolutionImage,
+           ToolboxDependency, Solution, SolutionDependency,
+           ToolboxVar, SolutionVar, Source, SolutionImage,
            ToolboxImage]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 

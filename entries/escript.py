@@ -1,4 +1,4 @@
-from models import SolutionVar, Source, SolutionToolbox, License, \
+from models import SolutionVar, SolutionDependency, Source, License, \
     ToolboxDependency
 from bootstrap import create_problem, create_toolbox, create_solution
 
@@ -129,8 +129,9 @@ def create(user):
         type="int"
     )
     # Dependencies
-    SolutionToolbox.create(solution=escript_solution,
-                           dependency=escript_toolbox)
+    SolutionDependency.create(solution=escript_solution,
+                              type="toolbox",
+                              identifier="http://localhost:5000/toolbox/1")
     ToolboxDependency.create(toolbox=escript_toolbox,
                              type="puppet",
                              identifier="stahnma/epel")

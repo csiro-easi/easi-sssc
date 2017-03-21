@@ -3,7 +3,12 @@
     <div class="panel-body">
     <ul>
         {% for d in entry.dependencies %}
-        <li class="dep-{{d.type}}">{{ d.identifier }}{% if d.version %}=={{ d.version }}{% endif %}{% if d.repository %} ({{ d.repository }}){% endif %}</li>
+        <li class="dep-{{d.type}}">
+            {% if d.type == 'toolbox' %}<a href="{{d.identifier}}">{% endif %}
+            {{ d.identifier }}{% if d.version %}=={{ d.version }}{% endif %}
+            {% if d.repository %} ({{ d.repository }}){% endif %}
+            {% if d.type == 'toolbox' %}</a>{% endif %}
+        </li>
         {% endfor %}
     </ul>
   </div>

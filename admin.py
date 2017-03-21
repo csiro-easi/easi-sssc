@@ -6,8 +6,8 @@ from flask_security import current_user
 from wtforms import fields
 from app import app
 from security import security
-from models import User, Problem, Solution, Toolbox, Dependency, \
-    SolutionToolbox, SolutionDependency, ToolboxToolbox, ToolboxDependency, \
+from models import Problem, Solution, Toolbox, \
+    SolutionDependency, ToolboxDependency, \
     SolutionVar, ToolboxVar, JsonField
 
 admin = Admin(app)
@@ -28,7 +28,7 @@ class ProtectedModelView(ModelView):
         return current_user.is_active and current_user.is_authenticated
 
     def _handle_view(self, name, **kwargs):
-        """Override builtin _handle_view to redirect users when a view is not accessible."""
+        """Override to redirect users when a view is not accessible."""
         if not self.is_accessible():
             if current_user.is_authenticated:
                 # permission denied
@@ -49,11 +49,11 @@ class ProblemAdmin(ProtectedModelView):
 
 class SolutionAdmin(ProtectedModelView):
     model_form_converter = VarValuesConverter
-    inline_models = (SolutionDependency, SolutionToolbox, SolutionVar)
+    inline_models = (SolutionDependency, SolutionVar)
 
 
 class ToolboxAdmin(ProtectedModelView):
-    inline_models = (ToolboxDependency, ToolboxToolbox, ToolboxVar)
+    inline_models = (ToolboxDependency, ToolboxVar)
 
 
 # admin.add_view(UserAdmin(User))
