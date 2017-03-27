@@ -2,7 +2,7 @@
     <div class="panel-heading"><h2 class="panel-title">Dependencies</h2></div>
     <div class="panel-body">
     <ul>
-        {% for d in entry.dependencies %}
+        {% for d in entry.deps %}
         <li class="dep-{{d.type}}">
             {% if d.type == 'toolbox' %}<a href="{{d.identifier}}">{% endif %}
             {{ d.identifier }}{% if d.version %}=={{ d.version }}{% endif %}

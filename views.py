@@ -238,7 +238,7 @@ class SolutionView(EntryView):
         problem.update({'@id': entry_url(entry.problem)})
         dependencies = [properties(d, ['type', 'identifier',
                                        'version', 'repository'])
-                        for d in entry.dependencies]
+                        for d in entry.deps]
         d.update({
             'problem': problem,
             'template': entry.template,
@@ -280,7 +280,7 @@ class ToolboxView(EntryView):
             'command': entry.command,
             'dependencies': [properties(d, ['type', 'identifier',
                                             'version', 'repository'])
-                             for d in entry.dependencies]
+                             for d in entry.deps]
         })
         return d
 
@@ -469,7 +469,7 @@ class SolutionProvView(ProvView):
         solution = entry_term(entry)
         triples.append((solution, RDF.type, PROV.Plan))
         triples.extend([(solution, PROV.wasDerivedFrom, URIRef(t.identifier))
-                        for t in entry.dependencies
+                        for t in entry.deps
                         if t.type == 'toolbox'])
         triples.append((solution,
                         PROV.wasDerivedFrom,

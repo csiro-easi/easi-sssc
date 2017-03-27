@@ -21,7 +21,7 @@
       <div class="panel-heading"><h2 class="panel-title">Toolboxes</h2></div>
       <div class="panel-body">
           <div class="list-group">
-              {% for t in entry.dependencies %}
+              {% for t in entry.deps %}
               {% if t.type == 'toolbox' %}
               <a href="{{ t.identifier }}"
                  class="list-group-item"> 

@@ -1,7 +1,7 @@
 from flask import json
-from peewee import BooleanField, CharField, DateTimeField, CompositeKey, \
-    DoubleField, ForeignKeyField, IntegerField, Model, PrimaryKeyField, \
-    TextField
+from peewee import BooleanField, CharField, DateTimeField, \
+    DoubleField, ForeignKeyField, IntegerField, PrimaryKeyField, \
+    TextField, Model
 # Use the ext database to get FTS support
 # from peewee import SqliteDatabase
 from playhouse.sqlite_ext import FTSModel, SqliteExtDatabase
@@ -111,9 +111,9 @@ class Entry(BaseModel):
     name = CharField()
     description = TextField()
     created_at = DateTimeField(default=datetime.datetime.now)
-    author = ForeignKeyField(User)
     version = IntegerField(default=1)
     keywords = TextField(null=True)
+    # author = ForeignKeyField(User)
 
     def __unicode__(self):
         return "entry ({})".format(self.name)
@@ -152,7 +152,7 @@ class Problem(Entry):
     Requires nothing extra over Entry.
 
     """
-    pass
+    author = ForeignKeyField(User)
 
 
 class Source(BaseModel):
@@ -187,6 +187,7 @@ class Toolbox(Entry):
     """Environment for running a specific model or software package.
 
     """
+    author = ForeignKeyField(User)
     homepage = CharField(null=True)
     license = ForeignKeyField(License, related_name="toolboxes")
     source = ForeignKeyField(Source, null=True, related_name="toolboxes")
@@ -203,7 +204,7 @@ class Toolbox(Entry):
 
 class ToolboxDependency(Dependency):
     """External dependencies for Toolboxes."""
-    toolbox = ForeignKeyField(Toolbox, related_name="dependencies")
+    toolbox = ForeignKeyField(Toolbox, related_name="deps")
 
 
 class ToolboxImage(Image):
@@ -215,13 +216,14 @@ class ToolboxImage(Image):
 
 
 class Solution(Entry):
+    author = ForeignKeyField(User)
     problem = ForeignKeyField(Problem, related_name="solutions")
     template = CharField()
     runtime = CharField(choices=RUNTIME_CHOICES, default="python")
 
 
 class SolutionDependency(Dependency):
-    solution = ForeignKeyField(Solution, related_name="dependencies")
+    solution = ForeignKeyField(Solution, related_name="deps")
 
 
 class SolutionImage(Image):

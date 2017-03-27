@@ -6,8 +6,9 @@ from flask_security import current_user
 from wtforms import fields
 from app import app
 from security import security, is_admin, is_user
-from models import Problem, Solution, Toolbox, \
+from models import Problem, Solution, Toolbox, User, \
     SolutionDependency, ToolboxDependency, \
+    SolutionImage, ToolboxImage, \
     SolutionVar, ToolboxVar, JsonField
 
 admin = Admin(app)
@@ -37,6 +38,71 @@ class ProtectedModelView(ModelView):
                 current_user.is_authenticated and
                 is_user())
 
+    def _handle_view(self, name, **kwargs):
+        """Override to redirect users when a view is not accessible."""
+        if not self.is_accessible():
+            if current_user.is_authenticated:
+                # permission denied
+                abort(403)
+            else:
+                # login
+                return redirect(url_for('security.login', next=request.url))
+
+
+# Add admin views here
+class UserAdmin(ProtectedModelView):
+    # Only allow admins to access the User admin views
+    def is_accessible(self):
+        return is_admin()
+
+
+def _clone_model(model):
+    """Create and return a clone of model.
+
+    Save a clone of entry in the database, including all reverse relations
+    (Vars, Deps etc).
+
+    """
+    # Copy current data
+    data = dict(model._data)
+    # clear the primary key
+    data.pop(model._meta.primary_key.name)
+    # Create the new entry
+    # TODO handle unique id/entry combo!
+    copy = type(model).create(**data)
+    # Update references in copied relations to point to the clone
+    for n, f in copy._meta.reverse_rel.items():
+        for x in getattr(copy, n):
+            setattr(x, f.name, copy)
+    copy.save()
+    return copy
+
+
+def _update_entry_history(entry):
+    """Capture the current state of entry before it's updated.
+
+    Then increment the version number for entry.
+
+    """
+    # Find the old state of entry in the db
+    E = type(entry)
+    old_entry = E.get(E.id == entry.id)
+    _clone_model(old_entry)
+    entry.version = entry.version + 1
+
+
+class EntryModelView(ProtectedModelView):
+    """View for administering all Entries.
+
+    Control access to entries based on user authorisation.
+
+    Handles versioning of entries as they are created and modified.
+
+    TODO: Decide on whether/how to limit deletion
+
+    """
+    form_excluded_columns = ['author', 'version']
+
     # If user does not have the 'admin' role, only allow them to administer
     # their own views.
     def get_query(self):
@@ -61,36 +127,28 @@ class ProtectedModelView(ModelView):
 
         return it
 
-    def _handle_view(self, name, **kwargs):
-        """Override to redirect users when a view is not accessible."""
-        if not self.is_accessible():
-            if current_user.is_authenticated:
-                # permission denied
-                abort(403)
-            else:
-                # login
-                return redirect(url_for('security.login', next=request.url))
+    def on_model_change(self, form, model, is_created):
+        """Maintain model metadata."""
+        if is_created:
+            model.author = current_user.id
+        else:
+            _update_entry_history(model)
 
 
-# Add admin views here
-class UserAdmin(ProtectedModelView):
+class ProblemAdmin(EntryModelView):
     pass
 
 
-class ProblemAdmin(ProtectedModelView):
-    pass
-
-
-class SolutionAdmin(ProtectedModelView):
+class SolutionAdmin(EntryModelView):
     model_form_converter = VarValuesConverter
-    inline_models = (SolutionDependency, SolutionVar)
+    inline_models = (SolutionDependency, SolutionImage, SolutionVar)
 
 
-class ToolboxAdmin(ProtectedModelView):
-    inline_models = (ToolboxDependency, ToolboxVar)
+class ToolboxAdmin(EntryModelView):
+    inline_models = (ToolboxDependency, ToolboxImage, ToolboxVar)
 
 
-# admin.add_view(UserAdmin(User))
+admin.add_view(UserAdmin(User))
 admin.add_view(ProblemAdmin(Problem))
 admin.add_view(SolutionAdmin(Solution))
 admin.add_view(ToolboxAdmin(Toolbox))
