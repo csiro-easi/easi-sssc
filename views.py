@@ -212,6 +212,10 @@ class EntryView(MethodView):
         d['uri'] = entry_url(entry)
         d['@id'] = entry_url(entry)
 
+        # Include a link to latest version if relevant.
+        if entry.latest:
+            d['latest'] = url_for(entry.latest)
+
         # Add prov info and return
         d['@type'] = ['prov:Entity']
         d['prov:has_provenance'] = prov_url(entry)

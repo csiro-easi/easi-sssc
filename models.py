@@ -153,6 +153,7 @@ class Problem(Entry):
 
     """
     author = ForeignKeyField(User)
+    latest = ForeignKeyField('self', null=True, related_name='versions')
 
 
 class Source(BaseModel):
@@ -188,6 +189,7 @@ class Toolbox(Entry):
 
     """
     author = ForeignKeyField(User)
+    latest = ForeignKeyField('self', null=True, related_name='versions')
     homepage = CharField(null=True)
     license = ForeignKeyField(License, related_name="toolboxes")
     source = ForeignKeyField(Source, null=True, related_name="toolboxes")
@@ -217,6 +219,7 @@ class ToolboxImage(Image):
 
 class Solution(Entry):
     author = ForeignKeyField(User)
+    latest = ForeignKeyField('self', null=True, related_name='versions')
     problem = ForeignKeyField(Problem, related_name="solutions")
     template = CharField()
     runtime = CharField(choices=RUNTIME_CHOICES, default="python")
