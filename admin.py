@@ -2,11 +2,12 @@ from flask import abort, redirect, request, url_for
 from flask_admin import Admin, helpers as admin_helpers, expose
 from flask_admin.contrib.peewee import ModelView
 from flask_admin.contrib.peewee.form import CustomModelConverter
+from flask_admin.form import BaseForm
 from flask_security import current_user
 from wtforms import fields
 from app import app
 from security import security, is_admin, is_user
-from models import Problem, Solution, Toolbox, User, \
+from models import Problem, Solution, Toolbox, User, UserRoles, \
     SolutionDependency, ToolboxDependency, \
     SolutionImage, ToolboxImage, \
     SolutionVar, ToolboxVar, JsonField
@@ -49,8 +50,28 @@ class ProtectedModelView(ModelView):
                 return redirect(url_for('security.login', next=request.url))
 
 
+class UserRolesForm(BaseForm):
+    def validate(self):
+        if not super().validate():
+            return False
+        seen = set()
+        for userrole in self.data['roles']:
+            role = userrole['role']
+            if role in seen:
+                self['roles'].errors.append('Please select distinct roles.')
+                return False
+            else:
+                seen.add(role)
+        return True
+
+
 # Add admin views here
 class UserAdmin(ProtectedModelView):
+    column_exclude_list = ['password']
+    form_base_class = UserRolesForm
+    form_excluded_columns = ['id', 'confirmed_at', 'password']
+    inline_models = [(UserRoles, dict(form_label='Roles'))]
+
     # Only allow admins to access the User admin views
     def is_accessible(self):
         return is_admin()
@@ -59,11 +80,11 @@ class UserAdmin(ProtectedModelView):
 class UserProfile(ProtectedModelView):
     can_create = False
     can_delete = False
-    form_excluded_columns = ['id', 'active', 'confirmed_at']
+    form_excluded_columns = ['id', 'active', 'confirmed_at', 'password']
 
     @expose('/')
     def index_view(self):
-        """Users may only edit their own profile, so redirect there."""
+        """Users can't list or view others' profiles, so redirect list view."""
         return redirect(self.get_url('.edit_view') +
                         '?id={}'.format(current_user.id))
 

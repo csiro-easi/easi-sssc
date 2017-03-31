@@ -68,6 +68,9 @@ class Role(BaseModel, RoleMixin):
     name = CharField(unique=True)
     description = TextField(null=True)
 
+    def __unicode__(self):
+        return self.name
+
 
 class User(BaseModel, UserMixin):
     """Catalogue user."""
