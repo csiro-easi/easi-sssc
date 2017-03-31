@@ -46,15 +46,11 @@
             <li class="dropdown">
               <a href="#" class="dropdown-toggle" data-toggle="dropdown">Admin <span class="caret"></span></a>
               <ul class="dropdown-menu" role="menu">
-                <li role="presentation"><a href="{{ url_for('problem.index_view') }}">Manage Problems</a></li>
-                <li role="presentation"><a href="{{ url_for('solution.index_view') }}">Manage Solutions</a></li>
-                <li role="presentation"><a href="{{ url_for('toolbox.index_view') }}">Manage Toolboxess</a></li>
-                {# <li role="presentation"><a href="{{ url_for('user.index_view') }}">Manage Users</a></li> #}
+                <li role="presentation"><a href="{{ url_for('admin.index') }}">Manage Entries</a></li>
                 <li role="presentation" class="divider"></li>
                 <li role="presentation"><a href="{{ url_for('problem.create_view') }}">New Problem</a></li>
                 <li role="presentation"><a href="{{ url_for('solution.create_view') }}">New Solution</a></li>
                 <li role="presentation"><a href="{{ url_for('toolbox.create_view') }}">New Toolbox</a></li>
-                {# <li role="presentation"><a href="{{ url_for('user.create_view') }}">New User</a></li>  #}
               </ul>
             </li>
             <li><a href="https://www.seegrid.csiro.au/wiki/VirtualLabs/Vhirl/AddSSCContent">Help</a></li>
@@ -67,6 +63,20 @@
             </div>
             <button type="submit" class="btn btn-default">Search</button>
           </form>
+
+          <ul class="nav navbar-right navbar-nav">
+              {% if current_user.is_anonymous %}
+              <li><a href="{{ url_for('security.login') }}">Log in</a></li>
+              {% else %}
+              <li class="dropdown">
+                  <a href="#" class="dropdown-toggle" data-toggle="dropdown">{{ current_user.name }} <span class="caret"</span></a>
+                  <ul class="dropdown-menu" role="menu">
+                      <li role="presentation"><a href="{{ url_for('profile.edit_view') }}">Profile</a></li>
+                      <li role="presentation"><a href="{{ url_for('security.logout') }}">Log out</a></li>
+                  </ul>
+              </li>
+              {% endif %}
+          </ul>
         </div>
         {%- endblock -%}
       </div>
