@@ -172,6 +172,11 @@ class EntryModelView(ProtectedModelView):
         else:
             _update_entry_history(model)
 
+    def after_model_change(self, form, model, is_created):
+        """Update 'latest' links."""
+        model.latest = model.id
+        model.save()
+
 
 class ProblemAdmin(EntryModelView):
     pass

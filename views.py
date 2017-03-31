@@ -5,7 +5,7 @@ from markdown import markdown
 from app import app
 from models import db, Toolbox, Entry, Problem, Solution, text_search, User
 from werkzeug.exceptions import NotAcceptable
-from peewee import SelectQuery
+from peewee import SelectQuery, DoesNotExist
 from rdflib import Graph, URIRef, Namespace
 from rdflib.namespace import RDF
 
@@ -34,16 +34,23 @@ _jsonld_context = {
 }
 
 
-def entry_url(entry):
+def user_url(user):
+    """Return the URL for user."""
+    return url_for('site.user', _external=True, user_id=user.id)
+
+
+def entry_url(entry, pinned=False):
     """Return the URL for entry."""
     if entry:
         if isinstance(entry, dict):
-            entry_id = entry['id']
-        else:
-            entry_id = entry.id
+            raise NotImplementedError
+            # entry_id = entry['latest']
+        args = dict(entry_id=entry.latest.id)
+        if pinned or entry.latest.id != entry.id:
+            args['version'] = entry.version
         return url_for(_model_endpoint[type(entry)],
                        _external=True,
-                       entry_id=entry_id)
+                       **args)
 
 
 def prov_url(entry):
@@ -76,7 +83,8 @@ def entry_type(entry):
 @site.context_processor
 def entry_processor():
     return dict(entry_url=entry_url,
-                entry_type=entry_type)
+                entry_type=entry_type,
+                user_url=user_url)
 
 
 def add_context(response, context=_jsonld_context, embed=True):
@@ -167,13 +175,31 @@ def properties(obj, props):
     return d
 
 
+def _get_entry(model, id, version=None):
+    """Query model for the entry with id and optionally a version.
+
+    If a version is specified, return the corresponding entry. If no version is
+    specified, return the entry with id *as long as it's the latest version*.
+
+    """
+    if version is None:
+        entry = model.get((model.id == id))
+        if entry and entry.latest.id != entry.id:
+            raise DoesNotExist
+    else:
+        entry = model.get((model.latest == id) & (model.version == version))
+    return entry
+
+
 class EntryView(MethodView):
     detail_template = 'entries/detail.html'
+    model = None
 
     """Handle a single entry."""
     def get(self, entry_id):
+        version = request.args.get('version')
         try:
-            entry = self.query(entry_id)
+            entry = _get_entry(self.model, entry_id, version)
         except:
             abort(404)
         best = request.accept_mimetypes.best_match(["application/json",
@@ -202,9 +228,6 @@ class EntryView(MethodView):
                     entry_type=type(entry).__name__,
                     api_json=json.dumps(self.for_api(entry), indent=4))
 
-    def query(self, entry_id):
-        raise NotImplemented
-
     def for_api(self, entry):
         d = properties(entry, ['id', 'name', 'description', 'created_at',
                                'version', 'keywords',
@@ -214,7 +237,7 @@ class EntryView(MethodView):
 
         # Include a link to latest version if relevant.
         if entry.latest:
-            d['latest'] = url_for(entry.latest)
+            d['latest'] = entry_url(entry.latest)
 
         # Add prov info and return
         d['@type'] = ['prov:Entity']
@@ -224,16 +247,12 @@ class EntryView(MethodView):
 
 class ProblemView(EntryView):
     detail_template = 'entries/problem_detail.html'
-
-    def query(self, entry_id):
-        return Problem.get(Problem.id == entry_id)
+    model = Problem
 
 
 class SolutionView(EntryView):
     detail_template = 'entries/solution_detail.html'
-
-    def query(self, entry_id):
-        return Solution.get(Solution.id == entry_id)
+    model = Solution
 
     def for_api(self, entry):
         d = super().for_api(entry)
@@ -262,9 +281,7 @@ class SolutionView(EntryView):
 
 class ToolboxView(EntryView):
     detail_template = 'entries/toolbox_detail.html'
-
-    def query(self, entry_id):
-        return Toolbox.get(Toolbox.id == entry_id)
+    model = Toolbox
 
     def for_api(self, entry):
         d = super().for_api(entry)
@@ -290,8 +307,8 @@ class ToolboxView(EntryView):
 
 
 class UserView(MethodView):
-    def get(self, entry_id):
-        user = User.get(User.id == entry_id)
+    def get(self, user_id):
+        user = User.get(User.id == user_id)
         if not user:
             abort(404)
         entries = []
@@ -510,7 +527,7 @@ site.add_url_rule('/problem/',
                   view_func=ProblemsView.as_view('problem_list'))
 site.add_url_rule('/problem/<int:entry_id>',
                   view_func=ProblemView.as_view('problem_id'))
-site.add_url_rule('/users/<int:entry_id>',
+site.add_url_rule('/user/<int:user_id>',
                   view_func=UserView.as_view('user'))
 # Prov endpoints
 site.add_url_rule('/problem/<int:entry_id>/prov',
