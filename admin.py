@@ -139,7 +139,7 @@ class EntryModelView(ProtectedModelView):
     TODO: Decide on whether/how to limit deletion
 
     """
-    form_excluded_columns = ['author', 'version']
+    form_excluded_columns = ['author', 'latest', 'version']
 
     # If user does not have the 'admin' role, only allow them to administer
     # their own views.
