@@ -147,10 +147,12 @@ class EntryModelView(ProtectedModelView):
         # Start with the default query
         query = super().get_query()
 
-        # Limit results to those owned by a regular users
+        # Limit results to those owned by a regular users.
         if not is_admin():
-            query = query.where(self.model._meta.fields['author'] ==
-                                current_user.id)
+            query = query.where(self.model.author == current_user.id)
+
+        # Do not allow changing history - hide old versions of entries.
+        query = query.where(self.model.latest == self.model.id)
 
         return query
 
