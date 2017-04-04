@@ -1,5 +1,5 @@
 from flask import json
-from peewee import BooleanField, CharField, DateTimeField, \
+from peewee import BooleanField, BlobField, CharField, DateTimeField, \
     DoubleField, ForeignKeyField, IntegerField, PrimaryKeyField, \
     TextField, Model
 # Use the ext database to get FTS support
@@ -116,10 +116,23 @@ class Entry(BaseModel):
     created_at = DateTimeField(default=datetime.datetime.now)
     version = IntegerField(default=1)
     keywords = TextField(null=True)
-    # author = ForeignKeyField(User)
 
     def __unicode__(self):
         return "entry ({})".format(self.name)
+
+
+class Digest(BaseModel):
+    """Stores optionally signed digests for Entries.
+
+    If a digest has been signed, the entry in this table must include the
+    user_id of the user that signed it, and the key they used.
+
+    """
+    entry_id = ForeignKeyField(Entry, related_name='digests')
+    digest = BlobField()
+    created_at = DateTimeField(default=datetime.datetime.now)
+    user_id = ForeignKeyField(User, null=True)
+    user_key = CharField(null=True)
 
 
 class License(BaseModel):
@@ -332,7 +345,7 @@ def index_entry(entry):
 _TABLES = [User, Role, UserRoles, License, Problem, Toolbox,
            ToolboxDependency, Solution, SolutionDependency,
            ToolboxVar, SolutionVar, Source, SolutionImage,
-           ToolboxImage]
+           ToolboxImage, Digest]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 
 
