@@ -1298,6 +1298,11 @@ def default_context():
     return jsonldify({}, True)
 
 
+@site.route('/clone')
+def clone_entry():
+    """Create a clone of an Entry."""
+    pass
+
 @site.route('/')
 def index():
     return render_template('index.html')
