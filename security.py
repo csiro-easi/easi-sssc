@@ -1,14 +1,29 @@
-from flask_security import PeeweeUserDatastore, Security, current_user
+from flask_security import PeeweeUserDatastore, Security, current_user, \
+    RegisterForm, user_confirmed
+from flask_security.forms import Required
+from wtforms import StringField
 from app import app
 from models import db, create_database, User, Role, UserRoles
 
+
+class ScmRegisterForm(RegisterForm):
+    """Include extra fields (name, etc) in the registration form"""
+    name = StringField('Name', [Required()])
+
+
 # Security setup
 user_datastore = PeeweeUserDatastore(db, User, Role, UserRoles)
-security = Security(app, user_datastore)
+security = Security(app, user_datastore, confirm_register_form=ScmRegisterForm)
 
 # Create the database and roles
 admin_role = 'admin'
 user_role = 'user'
+
+
+@user_confirmed.connect_via(app)
+def on_user_confirmed(sender, user):
+    """Add the default user role to a newly confirmed user."""
+    user_datastore.add_role_to_user(user, user_role)
 
 
 def initialise_db():
