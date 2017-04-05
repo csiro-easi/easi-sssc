@@ -139,7 +139,7 @@ class EntryModelView(ProtectedModelView):
     TODO: Decide on whether/how to limit deletion
 
     """
-    form_excluded_columns = ['author', 'version']
+    form_excluded_columns = ['author', 'latest', 'version']
 
     # If user does not have the 'admin' role, only allow them to administer
     # their own views.
@@ -147,10 +147,12 @@ class EntryModelView(ProtectedModelView):
         # Start with the default query
         query = super().get_query()
 
-        # Limit results to those owned by a regular users
+        # Limit results to those owned by a regular users.
         if not is_admin():
-            query = query.where(self.model._meta.fields['author'] ==
-                                current_user.id)
+            query = query.where(self.model.author == current_user.id)
+
+        # Do not allow changing history - hide old versions of entries.
+        query = query.where(self.model.latest == self.model.id)
 
         return query
 
@@ -171,6 +173,11 @@ class EntryModelView(ProtectedModelView):
             model.author = current_user.id
         else:
             _update_entry_history(model)
+
+    def after_model_change(self, form, model, is_created):
+        """Update 'latest' links."""
+        model.latest = model.id
+        model.save()
 
 
 class ProblemAdmin(EntryModelView):

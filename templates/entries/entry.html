@@ -21,7 +21,7 @@
           <dt>Created at</dt>
           <dd>{{ entry.created_at.strftime('%H:%M %Y-%m-%d') }}</dd>
           <dt>Author</dt>
-          <dd><a href="{{ entry_url(entry.author) }}">{{ entry.author.name }}</a></dd>
+          <dd><a href="{{ user_url(entry.author) }}">{{ entry.author.name }}</a></dd>
           <dt>Version</dt>
           <dd>{{ entry.version }}</dd>
           <dt>Keywords</dt>
