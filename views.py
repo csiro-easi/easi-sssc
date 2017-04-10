@@ -39,14 +39,16 @@ def user_url(user):
     return url_for('site.user', _external=True, user_id=user.id)
 
 
-def entry_url(entry, pinned=False):
+def entry_url(entry, version=None, pinned=False):
     """Return the URL for entry."""
     if entry:
         if isinstance(entry, dict):
             raise NotImplementedError
             # entry_id = entry['latest']
         args = dict(entry_id=entry.latest.id)
-        if pinned or entry.latest.id != entry.id:
+        if version is not None:
+            args['version'] = version
+        elif pinned or entry.latest.id != entry.id:
             args['version'] = entry.version
         return url_for(_model_endpoint[type(entry)],
                        _external=True,
@@ -64,6 +66,21 @@ def prov_url(entry):
             entry_type = type(entry).__name__.lower()
         endpoint = "site.{}_prov".format(entry_type)
         return url_for(endpoint, _external=True, entry_id=entry_id)
+
+
+def edit_url(entry, url=None):
+    """Return the URL for editing entry.
+
+    If url is specified, it will be used as the URL to return to after editing
+    the entry.
+
+    """
+    if entry:
+        endpoint = "{}.edit_view".format(type(entry).__name__.lower())
+        return url_for(endpoint,
+                       _external=True,
+                       id=entry.id,
+                       url=url)
 
 
 def entry_term(entry):
@@ -84,7 +101,8 @@ def entry_type(entry):
 def entry_processor():
     return dict(entry_url=entry_url,
                 entry_type=entry_type,
-                user_url=user_url)
+                user_url=user_url,
+                edit_url=edit_url)
 
 
 def add_context(response, context=_jsonld_context, embed=True):
@@ -367,7 +385,7 @@ class EntriesView(MethodView):
 
     def query(self):
         """Return a SelectQuery instance with results for this view."""
-        return self.model.select()
+        return self.model.select().where(self.model.id == self.model.latest)
 
     def for_api(self, entries):
         # Return a dict with entries list

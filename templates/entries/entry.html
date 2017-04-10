@@ -2,22 +2,48 @@
 
 <div class="panel panel-default">
   <div class="panel-heading">
-    <h2 class="panel-title"><a href="{{ url }}">{{ entry.name }}</a></h2>
+    <h3 class="panel-title">
+      <a href="{{ url }}">{{ entry.name }}</a>
+      <!-- </h3> -->
+      <div class="btn-toolbar pull-right">
+        <div class="btn-group">
+          {% if entry.id == entry.latest.id %}
+          <a class="btn btn-link btn-xs" role="button" href="{{ edit_url(entry, url=request.full_path) }}">Edit</a>
+          {% else %}
+          <a class="btn btn-link btn-xs disabled" role="button" href="#">Edit</a>
+          {% endif %}
+        </div>
+
+        <div class="btn-group">
+          <button type="button" class="btn btn-link btn-xs dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            Versions
+            <span class="caret"></span>
+          </button>
+          <ul class="dropdown-menu">
+            {% for v in range(entry.latest.version, 0, -1) %}
+            <li {% if v == entry.version %}class="disabled"{% endif %}>
+              <a href="{{ entry_url(entry, version=v) }}">
+                {{ v }}
+                {% if v == entry.latest.version %}(latest){% endif %}
+              </a>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </h3>
   </div>
   <div class="panel-body">
     <div class="row">
       <div class="col-md-6">
-        <dl>
-          <dt>Description</dt>
-          <dd>{{ entry.description|markdown|safe }}</dd>
-
-          <dt>URL</dt>
-          <dd><a href="{{ url }}">{{ url }}</a></dd>
-
-        </dl>
+        <!-- <h3>Description</h3> -->
+        {{ entry.description|markdown|safe }}
+        <!-- <p>{{ entry.description|markdown|safe }}</p> -->
       </div>
       <div class="col-md-6">
-        <dl class="metadata">
+        <dl class="metadata dl-horizontal">
+          <dt>URL</dt>
+          <dd><a href="{{ url }}">{{ url }}</a></dd>
           <dt>Created at</dt>
           <dd>{{ entry.created_at.strftime('%H:%M %Y-%m-%d') }}</dd>
           <dt>Author</dt>

@@ -2,7 +2,10 @@
 
 {% block page_header %}
 <div class="page-header">
-  <h1>{{ entry_type }}: {{ entry.name }} <button type="button" class="btn btn-info pull-right" data-toggle="modal" data-target=".api-json-modal">API JSON</button></h1>
+  <h2>
+    {{ entry_type }}: {{ entry.name }}
+    <button type="button" class="btn btn-link pull-right" data-toggle="modal" data-target=".api-json-modal">JSON</button>
+  </h2>
 </div>
 {% endblock %}
 
