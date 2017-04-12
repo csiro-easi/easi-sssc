@@ -89,46 +89,6 @@ class UserProfile(ProtectedModelView):
                         '?id={}'.format(current_user.id))
 
 
-def _clone_model(model):
-    """Create and return a clone of model.
-
-    Save a clone of entry in the database, including all reverse relations
-    (Vars, Deps etc).
-
-    """
-    # Copy current data
-    data = dict(model._data)
-    # clear the primary key
-    data.pop(model._meta.primary_key.name)
-    # Create the new entry
-    # TODO handle unique id/entry combo!
-    copy = type(model).create(**data)
-    # Update references in copied relations to point to the clone
-    for n, f in copy._meta.reverse_rel.items():
-        for x in getattr(copy, n):
-            setattr(x, f.name, copy)
-    copy.save()
-    return copy
-
-
-def _update_entry_history(entry):
-    """Capture the current state of entry before it's updated.
-
-    Then increment the version number for entry.
-
-    """
-    # Find the old state of entry in the db
-    E = type(entry)
-    old_entry = E.get(E.id == entry.id)
-    # Clone the old state into a historical version, and link it back to the
-    # latest entry.
-    clone = _clone_model(old_entry)
-    clone.latest = entry.id
-    clone.save()
-    # Increment the version on the latest entry
-    entry.version = entry.version + 1
-
-
 class EntryModelView(ProtectedModelView):
     """View for administering all Entries.
 
@@ -139,7 +99,12 @@ class EntryModelView(ProtectedModelView):
     TODO: Decide on whether/how to limit deletion
 
     """
-    form_excluded_columns = ['author', 'latest', 'version']
+    form_excluded_columns = ['author',
+                             'latest',
+                             'version',
+                             'created_at',
+                             'digest']
+    column_editable_list = ['name', 'description']
 
     # If user does not have the 'admin' role, only allow them to administer
     # their own views.
@@ -172,7 +137,8 @@ class EntryModelView(ProtectedModelView):
         if is_created:
             model.author = current_user.id
         else:
-            _update_entry_history(model)
+            model.update_history()
+        model.before_save()
 
     def after_model_change(self, form, model, is_created):
         """Update 'latest' links."""
@@ -185,12 +151,25 @@ class ProblemAdmin(EntryModelView):
 
 
 class SolutionAdmin(EntryModelView):
+    form_excluded_columns = EntryModelView.form_excluded_columns + \
+                            ['template_hash']
     model_form_converter = VarValuesConverter
-    inline_models = (SolutionDependency, SolutionImage, SolutionVar)
+    inline_models = (
+        SolutionDependency,
+        SolutionImage,
+        SolutionVar
+    )
 
 
 class ToolboxAdmin(EntryModelView):
-    inline_models = (ToolboxDependency, ToolboxImage, ToolboxVar)
+    form_excluded_columns = EntryModelView.form_excluded_columns + \
+                            ['puppet_hash']
+    model_form_converter = VarValuesConverter
+    inline_models = (
+        ToolboxDependency,
+        ToolboxImage,
+        ToolboxVar
+    )
 
 
 admin.add_view(UserAdmin(User))
