@@ -88,7 +88,7 @@
   <div class="panel-body">
     <ul>
       {% for d in entry.solutions %}
-      <li><a href="{{ entry_url(d.solution) }}">{{ d.solution.name }}</a></li>
+      <li><a href="{{ model_url(d.solution) }}">{{ d.solution.name }}</a></li>
       {% endfor %}
     </ul>
   </div>

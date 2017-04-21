@@ -10,7 +10,8 @@ from security import security, is_admin, is_user
 from models import Problem, Solution, Toolbox, User, UserRoles, \
     SolutionDependency, ToolboxDependency, \
     SolutionImage, ToolboxImage, \
-    SolutionVar, ToolboxVar, JsonField
+    SolutionVar, ToolboxVar, JsonField, Entry
+from views import hash_entry
 
 admin = Admin(app)
 
@@ -103,7 +104,7 @@ class EntryModelView(ProtectedModelView):
                              'latest',
                              'version',
                              'created_at',
-                             'digest']
+                             'entry_hash']
     column_editable_list = ['name', 'description']
 
     # If user does not have the 'admin' role, only allow them to administer
@@ -132,17 +133,17 @@ class EntryModelView(ProtectedModelView):
 
         return it
 
-    def on_model_change(self, form, model, is_created):
+    def on_model_change(self, form, model, is_created=False):
         """Maintain model metadata."""
-        if is_created:
-            model.author = current_user.id
-        else:
-            model.update_history()
-        model.before_save()
+        # Update model metadata
+        model.update_metadata(is_created)
 
-    def after_model_change(self, form, model, is_created):
-        """Update 'latest' links."""
+    def after_model_change(self, form, model, is_created=False):
+        """Update 'latest' links and entry hashes."""
         model.latest = model.id
+        # Hash updated content and store result with model
+        if isinstance(model, Entry):
+            model.entry_hash = hash_entry(model)
         model.save()
 
 

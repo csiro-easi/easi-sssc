@@ -7,7 +7,7 @@
     <div class="panel panel-default">
       <div class="panel-heading"><h2 class="panel-title">Problem</h2></div>
       <div class="panel-body">
-        {# <a href="{{ entry_url(entry.problem) }}">{{ entry_url(entry.problem) }}</a> #}
+        {# <a href="{{ model_url(entry.problem) }}">{{ entry_url(entry.problem) }}</a> #}
         {% with %}
         {% set entry = entry.problem %}
         {% include 'entries/brief.html' %}

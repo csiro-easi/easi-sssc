@@ -1,19 +1,16 @@
 from flask import json
-from peewee import BooleanField, BlobField, CharField, DateTimeField, \
+from peewee import BooleanField, CharField, DateTimeField, \
     DoubleField, ForeignKeyField, IntegerField, PrimaryKeyField, \
     TextField, Model
 # Use the ext database to get FTS support
 # from peewee import SqliteDatabase
+from playhouse.shortcuts import model_to_dict
 from playhouse.sqlite_ext import FTSModel, SqliteExtDatabase
 from flask_security import UserMixin, RoleMixin, current_user
 from datetime import datetime
 import importlib
-import hashlib
 import requests
-from app import app
-
-# Import the configured hash function from hashlib
-hash_fn = getattr(hashlib, app.config['ENTRY_HASH_FUNCTION'])
+from app import app, resource_hash
 
 # Valid source repositories
 SOURCE_TYPES = (('git', 'GIT repository'),
@@ -83,25 +80,38 @@ def clone_model(model):
     return copy
 
 
+def entry_to_dict(entry, exclude=None, only=None):
+    """Return a dict view of entry.
+
+    Foreign key and reverse relations will be recursively expanded.
+
+    If include_class is true, then the __class__ attribute of each model will
+    be included in the dict.
+
+    Exclude and only are lists of field names to be excluded or exclusively
+    included respectively.
+
+    """
+    if not entry:
+        return None
+    # Map field names to fields.
+    if exclude is not None:
+        exclude = [entry._meta.fields[x] for x in exclude]
+    if only is not None:
+        only = [entry._meta.fields[x] for x in only]
+    extra_attrs = ['entry_id']
+    extra_attrs.append('__class__')
+    # Use peewee function to do the heavy lifting
+    entry_d = model_to_dict(entry,
+                            recurse=True,
+                            backrefs=True,
+                            exclude=exclude,
+                            only=only,
+                            extra_attrs=extra_attrs)
+    return entry_d
+
+
 class BaseModel(Model):
-    def _include_in_hash(self, f):
-        """Return True if f is the name of a field that should be included in the hash."""
-        return True
-
-    def _hash_data(self):
-        """Return a sequence of hashable data."""
-        data = self._data.copy()
-        # Sort by field name so we have a deterministic order
-        hashable = [repr(data.get(f)).encode()
-                    for f in sorted(filter(self._include_in_hash, data))]
-        # Then add fields from child entities
-        for f in sorted(self._meta.reverse_rel):
-            if self._include_in_hash(f):
-                child = getattr(self, f)
-                if child:
-                    hashable += child._hash_data()
-        return hashable
-
     class Meta:
         database = db
 
@@ -150,7 +160,7 @@ class Signature(BaseModel):
     user_id of the user that signed it, and the key they used.
 
     """
-    digest = BlobField()
+    digest = CharField()
     created_at = DateTimeField(default=datetime.now)
     user_id = ForeignKeyField(User, null=True)
     user_key = CharField(null=True)
@@ -173,11 +183,11 @@ class Entry(BaseModel):
     created_at = DateTimeField(default=datetime.now)
     version = IntegerField(default=1)
     keywords = TextField(null=True)
-    entry_hash = BlobField()
+    entry_hash = CharField(null=True)
 
-    def _include_in_hash(self, f):
-        # Don't include versions, signatures or self references (latest)
-        return f not in ('versions', 'signatures', 'latest', 'entry_hash')
+    entry_id = property(lambda self: self.latest.id
+                        if self.latest is not None
+                        else None)
 
     def _check_resources(self, resources=None):
         """Check any resources, update any that have changed.
@@ -186,16 +196,17 @@ class Entry(BaseModel):
         since they were last checked.
 
         """
+        print('checking resources for', str(self))
         changed = []
         if resources:
             for rfield, hfield in resources:
                 url = getattr(self, rfield)
                 old_hash = getattr(self, hfield)
                 r = requests.get(url)
-                new_hash = hash_fn(r.content).digest()
+                new_hash = resource_hash(r.content).hexdigest()
                 if new_hash != old_hash:
                     changed.append((rfield, url))
-                    setattr(self, rfield, new_hash)
+                    setattr(self, hfield, new_hash)
         return changed
 
     def update_metadata(self, is_created=False):
@@ -217,11 +228,6 @@ class Entry(BaseModel):
             # Increment the version on the latest entry, and the timestamp
             self.version = self.version + 1
             self.created_at = datetime.now()
-            # Compute and set the new hash for this entry
-            entry_hash = hash_fn()
-            for data in self._hash_data():
-                entry_hash.update(data)
-            self.entry_hash = entry_hash.digest()
         # Check resources at this point
         self._check_resources()
 
@@ -319,12 +325,10 @@ class Toolbox(Entry):
         null=True,
         help_text="Puppet module that instantiates this Toolbox."
     )
-    puppet_hash = BlobField()
+    puppet_hash = CharField()
 
-    def _include_in_hash(self, f):
-        if f == 'puppet_hash':
-            return False
-        return super()._include_in_hash(f)
+    def _check_resources(self, resources=[('puppet', 'puppet_hash')]):
+        super()._check_resources(resources)
 
 
 class ToolboxSignature(BaseModel):
@@ -352,12 +356,10 @@ class Solution(Entry):
     problem = ForeignKeyField(Problem, related_name="solutions")
     runtime = CharField(choices=RUNTIME_CHOICES, default="python")
     template = CharField(help_text="URL of template that implements this Solution.")
-    template_hash = BlobField()
+    template_hash = CharField()
 
-    def _include_in_hash(self, f):
-        if f == 'template_hash':
-            return False
-        return super()._include_in_hash(f)
+    def _check_resources(self, resources=[('template', 'template_hash')]):
+        super()._check_resources(resources)
 
 
 class SolutionSignature(BaseModel):
@@ -467,10 +469,10 @@ def index_entry(entry):
         obj.save()
 
 
-_TABLES = [User, Role, UserRoles, License, Problem, Toolbox,
+_TABLES = [User, Role, UserRoles, License, Problem, Toolbox, Signature,
            ToolboxDependency, Solution, SolutionDependency,
            ToolboxVar, SolutionVar, Source, SolutionImage,
-           ToolboxImage]
+           ToolboxImage, ProblemSignature, ToolboxSignature, SolutionSignature]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 
 

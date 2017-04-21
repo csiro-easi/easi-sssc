@@ -1,4 +1,4 @@
-{% set url = entry_url(entry) %}
+{% set url = model_url(entry) %}
 
 <div class="panel panel-default">
   <div class="panel-heading">
@@ -22,7 +22,7 @@
           <ul class="dropdown-menu">
             {% for v in range(entry.latest.version, 0, -1) %}
             <li {% if v == entry.version %}class="disabled"{% endif %}>
-              <a href="{{ entry_url(entry, version=v) }}">
+              <a href="{{ model_url(entry, version=v) }}">
                 {{ v }}
                 {% if v == entry.latest.version %}(latest){% endif %}
               </a>
@@ -47,7 +47,7 @@
           <dt>Created at</dt>
           <dd>{{ entry.created_at.strftime('%H:%M %Y-%m-%d') }}</dd>
           <dt>Author</dt>
-          <dd><a href="{{ user_url(entry.author) }}">{{ entry.author.name }}</a></dd>
+          <dd><a href="{{ model_url(entry.author) }}">{{ entry.author.name }}</a></dd>
           <dt>Version</dt>
           <dd>{{ entry.version }}</dd>
           <dt>Keywords</dt>
