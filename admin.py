@@ -10,7 +10,8 @@ from security import security, is_admin, is_user
 from models import Problem, Solution, Toolbox, User, UserRoles, \
     SolutionDependency, ToolboxDependency, \
     SolutionImage, ToolboxImage, \
-    SolutionVar, ToolboxVar, JsonField, Entry
+    SolutionVar, ToolboxVar, JsonField, Entry, \
+    ProblemTag, ToolboxTag, SolutionTag
 from views import hash_entry
 
 admin = Admin(app)
@@ -148,7 +149,7 @@ class EntryModelView(ProtectedModelView):
 
 
 class ProblemAdmin(EntryModelView):
-    pass
+    inline_models = (ProblemTag,)
 
 
 class SolutionAdmin(EntryModelView):
@@ -158,7 +159,8 @@ class SolutionAdmin(EntryModelView):
     inline_models = (
         SolutionDependency,
         SolutionImage,
-        SolutionVar
+        SolutionVar,
+        SolutionTag
     )
 
 
@@ -169,7 +171,8 @@ class ToolboxAdmin(EntryModelView):
     inline_models = (
         ToolboxDependency,
         ToolboxImage,
-        ToolboxVar
+        ToolboxVar,
+        ToolboxTag
     )
 
 

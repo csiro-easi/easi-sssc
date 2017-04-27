@@ -1,16 +1,14 @@
-from collections.abc import Iterable
 from flask import (Blueprint, request, render_template, url_for, jsonify,
                    make_response, abort)
 from flask.views import MethodView
 from markdown import markdown
 from app import app, entry_hash
-import models
 from models import db, Toolbox, Entry, Problem, Solution, text_search, User, \
-    License, BaseModel
-from namespaces import PROV, SSSC
+    License, BaseModel, Role, Dependency
+from namespaces import PROV
 from werkzeug.exceptions import NotAcceptable
 from peewee import SelectQuery, DoesNotExist
-from rdflib import BNode, Graph, URIRef, Namespace
+from rdflib import BNode, Graph, URIRef
 from rdflib.namespace import RDF
 
 site = Blueprint('site', __name__, template_folder='templates')
@@ -105,15 +103,20 @@ def edit_url(entry, url=None):
 
 # These fields should *never* be returned to clients
 _hidden_fields = set([
-    User.id,
-    Problem.id,
-    Toolbox.id,
-    Solution.id,
-    License.id,
     User.password,
     Problem.problemindex_set,
     Solution.solutionindex_set,
     Toolbox.toolboxindex_set
+])
+
+_internal_identifiers = set([
+    User.id,
+    Role.id,
+    Problem.id,
+    Toolbox.id,
+    Solution.id,
+    License.id,
+    Dependency.id
 ])
 
 # These fields should usually be returned as refs, not nested
@@ -150,7 +153,8 @@ def _clone_set(s, default=None):
 
 
 def model_to_dict(model, seen=None, exclude=None, refs=None,
-                  max_depth=None, include_nulls=False):
+                  max_depth=None, include_nulls=False,
+                  include_ids=False):
     """Return a dict view of model, suitable for the API. """
     max_depth = -1 if max_depth is None else max_depth
 
@@ -162,6 +166,8 @@ def model_to_dict(model, seen=None, exclude=None, refs=None,
     # Never expose certain fields!
     exclude |= _hidden_fields
     exclude |= seen
+    if not include_ids:
+        exclude |= _internal_identifiers
 
     data = {}
 
@@ -184,6 +190,8 @@ def model_to_dict(model, seen=None, exclude=None, refs=None,
     # Iterate over fields of model
     foreign = set(model._meta.rel.values())
     for f in model._meta.declared_fields:
+        # Exclude specified fields. Don't include 'id' fields unless explicitly
+        # requested.
         if f in exclude:
             continue
 
@@ -249,6 +257,12 @@ ignored_fields_for_hash = [
 ]
 
 
+def _sort_for_hash(x):
+    if isinstance(x, dict):
+        return x.get('id', x)
+    return x
+
+
 def hashable_data(obj):
     """Return a list of the hashable strings from obj.
 
@@ -257,27 +271,27 @@ def hashable_data(obj):
 
     """
     data = []
-    for k, v in sorted(obj.items()):
-        if v is None or k in ignored_fields_for_hash:
-            # Check for fields to ignore and null values
-            continue
-        elif isinstance(v, dict):
-            # Recurse
+    if isinstance(obj, dict):
+        for k, v in sorted(obj.items()):
+            if v is None or k in ignored_fields_for_hash:
+                # Check for fields to ignore and null values
+                continue
+
             data.extend(hashable_data(v))
-        elif isinstance(v, list) or isinstance(v, tuple):
-            # Sort by id, then recurse into each
-            for x in sorted(v, key=lambda element: element.get('id')):
-                data.extend(hashable_data(x))
-        else:
-            # Include the string value.
-            data.append(str(v))
+    elif isinstance(obj, list) or isinstance(obj, tuple):
+        # Sort by id if available, then recurse into each
+        for x in sorted(obj, key=_sort_for_hash):
+            data.extend(hashable_data(x))
+    else:
+        # Include the string value.
+        data.append(str(obj))
     return data
 
 
 def hash_entry(entry):
     """Return the hex encoded digest for entry."""
     if entry is not None:
-        data = hashable_data(model_to_dict(entry))
+        data = hashable_data(model_to_dict(entry, include_ids=True))
         hash = entry_hash()
         for d in data:
             hash.update(d.encode())
