@@ -1,16 +1,17 @@
+from datetime import datetime
+import importlib
+import requests
 from flask import json
 from peewee import BooleanField, CharField, DateTimeField, \
     DoubleField, ForeignKeyField, IntegerField, PrimaryKeyField, \
     TextField, Model
 # Use the ext database to get FTS support
 # from peewee import SqliteDatabase
-from playhouse.shortcuts import model_to_dict
 from playhouse.sqlite_ext import FTSModel, SqliteExtDatabase
 from flask_security import UserMixin, RoleMixin, current_user
-from datetime import datetime
-import importlib
-import requests
+from rdflib.namespace import RDF
 from app import app, resource_hash
+from namespaces import PROV, SSSC, rdf_graph
 
 # Valid source repositories
 SOURCE_TYPES = (('git', 'GIT repository'),
@@ -80,38 +81,36 @@ def clone_model(model):
     return copy
 
 
-def entry_to_dict(entry, exclude=None, only=None):
-    """Return a dict view of entry.
-
-    Foreign key and reverse relations will be recursively expanded.
-
-    If include_class is true, then the __class__ attribute of each model will
-    be included in the dict.
-
-    Exclude and only are lists of field names to be excluded or exclusively
-    included respectively.
-
-    """
-    if not entry:
-        return None
-    # Map field names to fields.
-    if exclude is not None:
-        exclude = [entry._meta.fields[x] for x in exclude]
-    if only is not None:
-        only = [entry._meta.fields[x] for x in only]
-    extra_attrs = ['entry_id']
-    extra_attrs.append('__class__')
-    # Use peewee function to do the heavy lifting
-    entry_d = model_to_dict(entry,
-                            recurse=True,
-                            backrefs=True,
-                            exclude=exclude,
-                            only=only,
-                            extra_attrs=extra_attrs)
-    return entry_d
+def user_entries(user):
+    """Return a list of all entries created by user."""
+    entries = []
+    entries.extend(p for p in user.problems)
+    entries.extend(t for t in user.toolboxes)
+    entries.extend(s for s in user.solutions)
+    return entries
 
 
 class BaseModel(Model):
+    """Base of all application models.
+
+    Sets database connection.
+    Base semantic description functionality.
+
+    """
+    _semantic_types = []
+
+    def semantic_types(self, subject):
+        """Return an RDF graph describing an instnace of this model.
+
+        Subject is a BNode or URIRef.
+
+        """
+        g = rdf_graph()
+        g.add((subject, RDF.type, SSSC[type(self).__name__]))
+        for t in self._semantic_types:
+            g.add((subject, RDF.type, t))
+        return g
+
     class Meta:
         database = db
 
@@ -134,6 +133,10 @@ class User(BaseModel, UserMixin):
     name = CharField()
     active = BooleanField(default=True)
     confirmed_at = DateTimeField(null=True)
+
+    entries = property(user_entries)
+
+    _semantic_types = [PROV.Agent, PROV.Person]
 
     def __unicode__(self):
         return self.name
@@ -162,7 +165,7 @@ class Signature(BaseModel):
     """
     digest = CharField()
     created_at = DateTimeField(default=datetime.now)
-    user_id = ForeignKeyField(User, null=True)
+    user_id = ForeignKeyField(User, null=True, related_name='signatures')
     user_key = CharField(null=True)
 
 
@@ -182,12 +185,13 @@ class Entry(BaseModel):
     description = TextField()
     created_at = DateTimeField(default=datetime.now)
     version = IntegerField(default=1)
-    keywords = TextField(null=True)
     entry_hash = CharField(null=True)
 
     entry_id = property(lambda self: self.latest.id
                         if self.latest is not None
                         else None)
+
+    _semantic_types = [PROV.Entity]
 
     def _check_resources(self, resources=None):
         """Check any resources, update any that have changed.
@@ -235,10 +239,16 @@ class Entry(BaseModel):
         return "entry ({})".format(self.name)
 
 
+class Tag(BaseModel):
+    tag = CharField()
+
+
 class License(BaseModel):
     name = CharField(unique=True)
     url = CharField(null=True)
     text = TextField(null=True)
+
+    _semantic_types = [PROV.Entity]
 
     def __unicode__(self):
         return self.name if self.name else self.url
@@ -269,8 +279,12 @@ class Problem(Entry):
     Requires nothing extra over Entry.
 
     """
-    author = ForeignKeyField(User)
+    author = ForeignKeyField(User, related_name='problems')
     latest = ForeignKeyField('self', null=True, related_name='versions')
+
+
+class ProblemTag(Tag):
+    entry = ForeignKeyField(Problem, related_name='tags')
 
 
 class ProblemSignature(BaseModel):
@@ -311,7 +325,7 @@ class Toolbox(Entry):
     """Environment for running a specific model or software package.
 
     """
-    author = ForeignKeyField(User)
+    author = ForeignKeyField(User, related_name='toolboxes')
     latest = ForeignKeyField('self', null=True, related_name='versions')
     homepage = CharField(null=True)
     license = ForeignKeyField(License, related_name="toolboxes")
@@ -329,6 +343,10 @@ class Toolbox(Entry):
 
     def _check_resources(self, resources=[('puppet', 'puppet_hash')]):
         super()._check_resources(resources)
+
+
+class ToolboxTag(Tag):
+    entry = ForeignKeyField(Toolbox, related_name='tags')
 
 
 class ToolboxSignature(BaseModel):
@@ -351,15 +369,21 @@ class ToolboxImage(Image):
 
 
 class Solution(Entry):
-    author = ForeignKeyField(User)
+    author = ForeignKeyField(User, related_name='solutions')
     latest = ForeignKeyField('self', null=True, related_name='versions')
     problem = ForeignKeyField(Problem, related_name="solutions")
     runtime = CharField(choices=RUNTIME_CHOICES, default="python")
     template = CharField(help_text="URL of template that implements this Solution.")
     template_hash = CharField()
 
-    def _check_resources(self, resources=[('template', 'template_hash')]):
+    _semantic_types = [PROV.Entity, PROV.Plan]
+
+    def _check_resources(self, resources=(('template', 'template_hash'),)):
         super()._check_resources(resources)
+
+
+class SolutionTag(Tag):
+    entry = ForeignKeyField(Solution, related_name='tags')
 
 
 class SolutionSignature(BaseModel):
@@ -472,7 +496,8 @@ def index_entry(entry):
 _TABLES = [User, Role, UserRoles, License, Problem, Toolbox, Signature,
            ToolboxDependency, Solution, SolutionDependency,
            ToolboxVar, SolutionVar, Source, SolutionImage,
-           ToolboxImage, ProblemSignature, ToolboxSignature, SolutionSignature]
+           ToolboxImage, ProblemSignature, ToolboxSignature, SolutionSignature,
+           ProblemTag, ToolboxTag, SolutionTag]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 
 

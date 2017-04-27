@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from flask import (Blueprint, request, render_template, url_for, jsonify,
                    make_response, abort)
 from flask.views import MethodView
@@ -5,13 +6,12 @@ from markdown import markdown
 from app import app, entry_hash
 import models
 from models import db, Toolbox, Entry, Problem, Solution, text_search, User, \
-    License, entry_to_dict
+    License, BaseModel
+from namespaces import PROV, SSSC
 from werkzeug.exceptions import NotAcceptable
 from peewee import SelectQuery, DoesNotExist
-from rdflib import Graph, URIRef, Namespace
+from rdflib import BNode, Graph, URIRef, Namespace
 from rdflib.namespace import RDF
-
-PROV = Namespace("http://www.w3.org/ns/prov#")
 
 site = Blueprint('site', __name__, template_folder='templates')
 
@@ -40,7 +40,7 @@ def model_pk(model_class):
     return _model_api[model_class][2]
 
 
-def model_url(model, version=None, pinned=False, **kwargs):
+def model_url(model, version=None, pinned=False, endpoint=None, **kwargs):
     """Return URL for the model instance.
 
     If model is an Entry, then version and pinned can be used to specify what
@@ -48,24 +48,21 @@ def model_url(model, version=None, pinned=False, **kwargs):
     to create an URL that specifies the current version of the latest (default
     is not).
 
+    If endpoint is specified it will override the default endpoint for the
+    model class.
+
     """
-    if model:
-        if isinstance(model, dict):
-            model_id = model.get('entry_id', model.get('id'))
-            latest_id = model.get('latest', {}).get('id')
-            model_class = getattr(models, model.get('__class__'))
-            model_version = model.get('version')
+    if model and type(model) in _model_api:
+        model_id = (model.entry_id
+                    if hasattr(model, 'entry_id')
+                    else model.id)
+        if not hasattr(model, 'latest') or model.latest is None:
+            latest_id = None
         else:
-            model_id = (model.entry_id
-                        if hasattr(model, 'entry_id')
-                        else model.id)
-            if not hasattr(model, 'latest') or model.latest is None:
-                latest_id = None
-            else:
-                latest_id = model.latest.id
-            model_class = type(model)
-            model_version = (model.version if hasattr(model, 'version')
-                             else None)
+            latest_id = model.latest.id
+        model_class = type(model)
+        model_version = (model.version if hasattr(model, 'version')
+                         else None)
         # Is it an external model?
         if model_class not in _model_api:
             return None
@@ -77,22 +74,18 @@ def model_url(model, version=None, pinned=False, **kwargs):
             elif pinned or (latest_id is not None and latest_id != model_id):
                 args['version'] = model_version
         args.update(**kwargs)
-        return url_for(model_endpoint(model_class),
+        # Determine endpoint to use
+        if endpoint is None:
+            endpoint = model_endpoint(model_class)
+        return url_for(endpoint,
                        _external=True,
                        **args)
 
 
 def prov_url(entry):
     """Return the prov URL for entry."""
-    if entry:
-        if isinstance(entry, dict):
-            entry_id = entry['id']
-            entry_type = entry['type']
-        else:
-            entry_id = entry.id
-            entry_type = type(entry).__name__.lower()
-        endpoint = "site.{}_prov".format(entry_type)
-        return url_for(endpoint, _external=True, entry_id=entry_id)
+    endpoint = model_endpoint(type(entry)) + '_prov'
+    return model_url(entry, endpoint=endpoint)
 
 
 def edit_url(entry, url=None):
@@ -110,31 +103,140 @@ def edit_url(entry, url=None):
                        url=url)
 
 
-def entry_term(entry):
-    """Return the rdflib term referring to entry."""
-    return URIRef(model_url(entry))
+# These fields should *never* be returned to clients
+_hidden_fields = set([
+    User.id,
+    Problem.id,
+    Toolbox.id,
+    Solution.id,
+    License.id,
+    User.password,
+    Problem.problemindex_set,
+    Solution.solutionindex_set,
+    Toolbox.toolboxindex_set
+])
+
+# These fields should usually be returned as refs, not nested
+_default_refs = set([
+    Problem.latest,
+    Problem.solutions,
+    Problem.versions,
+    Toolbox.latest,
+    Toolbox.versions,
+    Solution.latest,
+    Solution.problem,
+    Solution.versions
+])
+
+# User details shouldn't be included in most client interactions.
+_default_exclude = set([
+    User.active,
+    User.confirmed_at,
+    User.email,
+    User.roles,
+    User.signatures,
+    User.problems,
+    User.solutions,
+    User.toolboxes
+])
 
 
-def entry_api(entry):
-    """Return a dict view of entry, suitable for API use.
+def _clone_set(s, default=None):
+    if s:
+        return set(s)
+    elif default is not None:
+        return set(default)
+    return set()
 
-    Exclude the entry_hash field, and replace all internal ids with URIs.
-    Replace __class__ fields with type names.
 
-    """
-    d = entry_to_dict(entry)
-    uri = model_url(entry)
+def model_to_dict(model, seen=None, exclude=None, refs=None,
+                  max_depth=None, include_nulls=False):
+    """Return a dict view of model, suitable for the API. """
+    max_depth = -1 if max_depth is None else max_depth
+
+    # Set up fields to extract, include some sensible defaults for the API
+    refs = _clone_set(refs, _default_refs)
+    exclude = _clone_set(exclude, _default_exclude)
+    seen = _clone_set(seen)
+
+    # Never expose certain fields!
+    exclude |= _hidden_fields
+    exclude |= seen
+
+    data = {}
+
+    # Always include semantic markup, plus an @id attribute if we have one
+    uri = model_url(model)
     if uri:
-        d['@id'] = uri
-    cls = d.pop('__class__')
-    d['type'] = cls
-    return d
+        data['@id'] = uri
+        prov = prov_url(model)
+        if prov:
+            data['prov:has_provenance'] = prov
+        subject = URIRef(uri)
+    else:
+        subject = BNode()
+    if isinstance(model, BaseModel):
+        g = model.semantic_types(subject)
+        data['@type'] = [t.n3(g.namespace_manager)
+                         for t in g.objects(subject=subject,
+                                            predicate=RDF.type)]
 
+    # Iterate over fields of model
+    foreign = set(model._meta.rel.values())
+    for f in model._meta.declared_fields:
+        if f in exclude:
+            continue
 
-def ref_uris(d):
-    """Return a copy of d with embedded relations replaced with references."""
-    return {k: v.get('@id', v) if isinstance(v, dict) else v
-            for k, v in d.items()}
+        f_data = model._data.get(f.name)
+        if f in foreign:
+            if f_data is not None:
+                rel_obj = getattr(model, f.name)
+                if f not in refs and max_depth != 0:
+                    # extract the related model data
+                    seen.add(f)
+                    f_data = model_to_dict(
+                        rel_obj,
+                        seen=seen,
+                        exclude=exclude,
+                        refs=refs,
+                        max_depth=max_depth - 1
+                    )
+                else:
+                    # Replace with external reference
+                    f_data = model_url(rel_obj)
+
+        if include_nulls or f_data is not None:
+            data[f.name] = f_data
+
+    # Iterate over reverse relations, and embed the data
+    model_class = type(model)
+    for related_name, fk in model._meta.reverse_rel.items():
+        descriptor = getattr(model_class, related_name)
+        if descriptor in exclude or fk in exclude:
+            continue
+
+        exclude.add(fk)
+        related_query = getattr(
+            model,
+            related_name + '_prefetch',
+            getattr(model, related_name)
+        )
+
+        accum = []
+        for rel_obj in related_query:
+            if descriptor in refs:
+                accum.append(model_url(rel_obj))
+            else:
+                accum.append(model_to_dict(
+                    rel_obj,
+                    seen=seen,
+                    exclude=exclude,
+                    refs=refs,
+                    max_depth=max_depth - 1
+                ))
+        data[related_name] = accum
+
+    return data
 
 
 ignored_fields_for_hash = [
@@ -175,7 +277,7 @@ def hashable_data(obj):
 def hash_entry(entry):
     """Return the hex encoded digest for entry."""
     if entry is not None:
-        data = hashable_data(ref_uris(entry_api(entry)))
+        data = hashable_data(model_to_dict(entry))
         hash = entry_hash()
         for d in data:
             hash.update(d.encode())
@@ -301,7 +403,49 @@ def checked_field(entry, field, hash_field=None):
     }
 
 
-class EntryView(MethodView):
+class ResourceView(MethodView):
+    prov_context = {
+        "Entity": "http://www.w3.org/ns/prov#Entity",
+        "Plan": "http://www.w3.org/ns/prov#Plan",
+        "wasDerivedFrom": {
+            "@id": "http://www.w3.org/ns/prov#wasDerivedFrom",
+            "@type": "@id"
+        },
+        "toolboxes": {
+            "@type": "@id"
+        }
+    }
+
+    def prov_view(self, entry):
+        # Build the RDF prov graph
+        g = Graph()
+        for t in self.graph(entry):
+            g.add(t)
+        # Return the appropriate serialization
+        matchable = ["application/ld+json",
+                     "application/json",
+                     "text/turtle",
+                     "application/rdf+xml"]
+        best = request.accept_mimetypes.best_match(matchable, default=None)
+        if best is None:
+            return NotAcceptable
+        serialize_args = dict(format=best)
+        mimetype = best
+        if best == "application/json":
+            best = "application/ld+json"
+            serialize_args = dict(format=best)
+        if best == "application/ld+json":
+            serialize_args.update(context=self.prov_context,
+                                  indent=4)
+        resp = make_response(g.serialize(**serialize_args))
+        resp.mimetype = mimetype
+        return resp
+
+    def graph(self, entry):
+        return entry.semantic_types(model_url(entry))
+
+
+class EntryView(ResourceView):
     detail_template = 'entries/detail.html'
     model = None
 
@@ -331,7 +475,9 @@ class EntryView(MethodView):
                 entry = self.get_one(entry_id, version)
             except:
                 abort(404)
-            if best == "application/json":
+            if request.url.endswith('/prov'):
+                return self.prov_view(entry)
+            elif best == "application/json":
                 return jsonldify(self.for_api(entry))
             elif best == "text/html":
                 return render_template(self.detail_template,
@@ -376,24 +522,7 @@ class EntryView(MethodView):
 
     def summary(self, entry):
         """Return a dict view summarizing entry (e.g. for listings)."""
-        d = properties(entry, ['id', 'name', 'description', 'created_at',
-                               'version', 'keywords'])
-        d['uri'] = model_url(entry)
-        d['@id'] = model_url(entry)
-        d['type'] = entry_type(entry)
-        d['author'] = {
-            '@id': model_url(entry.author),
-            'name': entry.author.name
-        }
-
-        # Include a link to latest version if relevant.
-        if entry.latest:
-            d['latest'] = model_url(entry.latest)
-
-        # Add prov info and return
-        d['@type'] = ['prov:Entity']
-        d['prov:has_provenance'] = prov_url(entry)
-        return d
+        return model_to_dict(entry)
 
     def for_api(self, entry):
         """Return a dict view of entry suitable for JSON."""
@@ -434,36 +563,6 @@ class SolutionView(EntryView):
         self.problem_id = request.args.get("problem")
         return super().get(entry_id)
 
-    def summary(self, entry):
-        d = super().summary(entry)
-        d['problem'] = model_url(entry.problem)
-        d['@type'].append('prov:Plan')
-        return d
-
-    def for_api(self, entry):
-        d = super().for_api(entry)
-        problem = properties(entry.problem, ['id', 'name', 'description'])
-        problem.update({'uri': model_url(entry.problem)})
-        problem.update({'@id': model_url(entry.problem)})
-        dependencies = [properties(d, ['type', 'identifier',
-                                       'version', 'repository'])
-                        for d in entry.deps]
-        d.update({
-            'problem': problem,
-            'template': checked_field(entry, 'template'),
-            'variables': [properties(v, ['name', 'type', 'label',
-                                         'description', 'optional',
-                                         'default', 'min', 'max',
-                                         'step', 'values'])
-                          for v in entry.variables],
-            'images': [properties(img, ['provider', 'image_id'])
-                       for img in entry.images],
-            'dependencies': dependencies,
-            # Include prov info
-            '@type': 'prov:Plan'
-        })
-        return d
-
     def get_list(self):
         """Optionally filter by problem."""
         query = super().get_list()
@@ -471,37 +570,24 @@ class SolutionView(EntryView):
             query = query.where(Solution.problem == self.problem_id)
         return query
 
+    def graph(self, entry):
+        g = super().graph(entry)
+        solution = URIRef(model_url(entry))
+        for t in entry.deps:
+            if isinstance(t, Toolbox):
+                g.add((solution, PROV.wasDerivedFrom, URIRef(model_url(t))))
+        g.add((solution,
+               PROV.wasDerivedFrom,
+               URIRef(model_url(entry.problem))))
+        return g
+
 
 class ToolboxView(EntryView):
     detail_template = 'entries/toolbox_detail.html'
     model = Toolbox
 
-    def for_api(self, entry):
-        d = super().for_api(entry)
-        license = properties(entry.license, ['name', 'url', 'text'])
-        license['@id'] = model_url(entry.license)
-        d.update({
-            'homepage': entry.homepage,
-            'license': license,
-            'source': properties(entry.source, ['type', 'url', 'checkout',
-                                                'setup']),
-            'images': [properties(img, ['provider', 'image_id'])
-                       for img in entry.images],
-            'variables': [properties(v, ['name', 'type', 'label',
-                                         'description', 'optional',
-                                         'default', 'min', 'max',
-                                         'step', 'values'])
-                          for v in entry.variables],
-            'puppet': checked_field(entry, 'puppet'),
-            'command': entry.command,
-            'dependencies': [properties(d, ['type', 'identifier',
-                                            'version', 'repository'])
-                             for d in entry.deps]
-        })
-        return d
 
-
-class UserView(MethodView):
+class UserView(ResourceView):
     def get(self, user_id):
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
@@ -545,14 +631,8 @@ class UserView(MethodView):
             else:
                 return NotAcceptable
 
-    def for_api(self, user):
-        return {
-            '@id': model_url(user),
-            'name': user.name
-        }
 
-
-class LicenseView(MethodView):
+class LicenseView(ResourceView):
     def get(self, license_id):
         if license_id is None:
             licenses = License.select()
@@ -565,92 +645,6 @@ class LicenseView(MethodView):
                 abort(404)
             return jsonldify(self.for_api(license))
 
-    def for_api(self, license):
-        return {
-            '@id': model_url(license),
-            'name': license.name,
-            'url': license.url,
-            'text': license.text
-        }
-
-
-class ProvView(MethodView):
-    model = Entry
-
-    prov_context = {
-        "Entity": "http://www.w3.org/ns/prov#Entity",
-        "Plan": "http://www.w3.org/ns/prov#Plan",
-        "wasDerivedFrom": {
-            "@id": "http://www.w3.org/ns/prov#wasDerivedFrom",
-            "@type": "@id"
-        },
-        "toolboxes": {
-            "@type": "@id"
-        }
-    }
-
-    def get(self, entry_id):
-        """Return the PROV info for entry_id."""
-        # Retrieve a single entry
-        try:
-            entry = self.model.get(self.model.id == entry_id)
-        except:
-            abort(404)
-        # Build the RDF prov graph
-        g = Graph()
-        for t in self.triples(entry):
-            g.add(t)
-        # Return the appropriate serialization
-        matchable = ["application/ld+json",
-                     "application/json",
-                     "text/turtle",
-                     "application/rdf+xml"]
-        best = request.accept_mimetypes.best_match(matchable, default=None)
-        if best is None:
-            return NotAcceptable
-        serialize_args = dict(format=best)
-        mimetype = best
-        if best == "application/json":
-            best = "application/ld+json"
-            serialize_args = dict(format=best)
-        if best == "application/ld+json":
-            serialize_args.update(context=self.prov_context,
-                                  indent=4)
-        resp = make_response(g.serialize(**serialize_args))
-        resp.mimetype = mimetype
-        return resp
-
-    def triples(self, entry):
-        triples = [(entry_term(entry), RDF.type, PROV.Entity)]
-        return triples
-
-    def query(self, entry_id):
-        raise NotImplemented
-
-
-class ProblemProvView(ProvView):
-    model = Problem
-
-
-class SolutionProvView(ProvView):
-    model = Solution
-
-    def triples(self, entry):
-        triples = super().triples(entry)
-        solution = entry_term(entry)
-        triples.append((solution, RDF.type, PROV.Plan))
-        triples.extend([(solution, PROV.wasDerivedFrom, URIRef(t.identifier))
-                        for t in entry.deps
-                        if t.type == 'toolbox'])
-        triples.append((solution,
-                        PROV.wasDerivedFrom,
-                        entry_term(entry.problem)))
-        return triples
-
-
-class ToolboxProvView(ProvView):
-    model = Toolbox
-
 
 # Dispatch to json/html views
 def register_api(model, view, endpoint, url, pk='id', pk_type='int'):
@@ -662,6 +656,9 @@ def register_api(model, view, endpoint, url, pk='id', pk_type='int'):
     site.add_url_rule(url, view_func=view_func, methods=['POST'])
     site.add_url_rule('{}<{}:{}>'.format(url, pk_type, pk),
                       view_func=view_func, methods=['GET', 'PUT', 'DELETE'])
+    prov_view_func = view.as_view(endpoint + '_prov')
+    site.add_url_rule('{}<{}:{}>/prov'.format(url, pk_type, pk),
+                      view_func=prov_view_func, methods=['GET'])
 
 
 register_api(Toolbox, ToolboxView, 'toolbox_api', '/toolboxes/', pk='entry_id')
@@ -669,14 +666,6 @@ register_api(Problem, ProblemView, 'problem_api', '/problems/', pk='entry_id')
 register_api(Solution, SolutionView, 'solution_api', '/solutions/', pk='entry_id')
 register_api(User, UserView, 'user_api', '/users/', pk='user_id')
 register_api(License, LicenseView, 'license_api', '/licenses/', pk='license_id')
-
-# Prov endpoints
-site.add_url_rule('/problems/<int:entry_id>/prov',
-                  view_func=ProblemProvView.as_view('problem_prov'))
-site.add_url_rule('/solutions/<int:entry_id>/prov',
-                  view_func=SolutionProvView.as_view('solution_prov'))
-site.add_url_rule('/toolboxes/<int:entry_id>/prov',
-                  view_func=ToolboxProvView.as_view('toolbox_prov'))
 
 
 @site.route('/search')
