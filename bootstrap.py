@@ -1,7 +1,8 @@
 # coding: utf-8
 
-from models import db, Problem, Solution, Toolbox,  drop_tables,  index_entry, License
-from security import user_datastore, user_role, admin_role, initialise_db
+from models import db, Problem, Solution, Toolbox,  drop_tables, index_entry, \
+    License
+from security import initialise_db
 
 
 def bootstrap():
