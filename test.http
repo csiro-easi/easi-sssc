@@ -1,25 +1,26 @@
-# No auth
+# Basic auth
+:example-auth := (format "Basic %s" (base64-encode-string (format "%s:%s" "geoffrey.squire@csiro.au" "foobar")))
+
+# Get a problem to sign
 GET http://localhost:5000/problems/1
 
-# Basic support
-:example-auth := (format "Basic %s" (base64-encode-string (format "%s:%s" "geoffrey.squire@csiro.au" "foobar")))
-GET http://localhost:5000/problems/
-Authorization: :example-auth
-
 # Test signature
-:example-auth := (format "Basic %s" (base64-encode-string (format "%s:%s" "geoffrey.squire@csiro.au" "foobar")))
 POST http://localhost:5000/signatures/
 Authorization: :example-auth
 Content-Type: application/json
 
 {
   "entry_id": "http://localhost:5000/problems/1",
-  "digest": "4c55bf7f1f00390fa3edaecce654fa34eac605e5cdc906f69609448de36b97c1",
-  "user_key": "sldfkjslfkjsdflskdjflsdkfjsldkfjsldkfj"
+  "entry_hash": "a93203b69aac2f624b253a6c34727330aa0c830cc082c796493db7f33432f0fa",
+  "signature": "",
+  "public_key": "-----BEGIN RSA PUBLIC KEY-----\nMIIBCgKCAQEAjdamd6OowvaxuaZDUEzf2pWUD/I60eqzDTeYA+4AE58sI+zlnKE9\ntuti74Z9ZSnkJfouX7C3K8BdVPpGHetE0dsbGBRQlCLKRpgIGYRRIY82ne4kduIF\nL/CePd7ZsduYFy0bsMOzfyRhAx+ryksXcXPwwiPW8KbzumlWIK/LViVOpYiLHWHN\nJ6cJ+Mm3Gkb3o0rPDKSlwsloiif/2rnLDmeehj/A49n8D2SzH1QZSdX+PBNlg1jn\n/W0KCoV/HP7Y3w9vIOlHdNTzFL+uLtuXb4svnO3U1lvd7f6OVOyLgxdjZL0ispBg\nIO0/zbNkkFOdJ/bKggMNfG4mr/Yto8NA7QIDAQAB\n-----END RSA PUBLIC KEY-----\n"
 }
 
 # Signatures
 GET http://localhost:5000/signatures/
 
-# A signature
-GET http://localhost:5000/signatures/4
+# Delete the signature
+DELETE http://localhost:5000/signatures/1
+Authorization: :example-auth
+
+

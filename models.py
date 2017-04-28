@@ -163,10 +163,33 @@ class Signature(BaseModel):
     user_id of the user that signed it, and the key they used.
 
     """
-    digest = CharField()
+    signature = CharField()
     created_at = DateTimeField(default=datetime.now)
     user_id = ForeignKeyField(User, null=True, related_name='signatures')
-    user_key = CharField(null=True)
+    public_key = CharField(null=True)
+
+    def get_entry_rel(self):
+        """Return the Entry this is a signature for."""
+        if self.problemsignature_set.count() == 1:
+            return self.problemsignature_set[0]
+        if self.toolboxsignature_set.count() == 1:
+            return self.toolboxsignature_set[0]
+        if self.solutionsignature_set.count() == 1:
+            return self.solutionsignature_set[0]
+        return None
+
+    @staticmethod
+    def add_signature(signature, user_id, public_key, entry):
+        """Add a new Signature for entry and return the new instance.
+
+        Ensure integrity by limiting a signature to one entry only.
+
+        """
+        instance = Signature(signature=signature,
+                             user_id=user_id,
+                             public_key=public_key)
+        instance.save()
+
 
 
 class Entry(BaseModel):
@@ -290,7 +313,7 @@ class ProblemTag(Tag):
 class ProblemSignature(BaseModel):
     """Signatures for Problems."""
     problem = ForeignKeyField(Problem, related_name="signatures")
-    signature = ForeignKeyField(Signature, unique=True)
+    signature = ForeignKeyField(Signature, unique=True, on_delete='CASCADE')
 
 
 class Source(BaseModel):
@@ -352,7 +375,7 @@ class ToolboxTag(Tag):
 class ToolboxSignature(BaseModel):
     """Signatures for Toolboxs."""
     toolbox = ForeignKeyField(Toolbox, related_name="signatures")
-    signature = ForeignKeyField(Signature, unique=True)
+    signature = ForeignKeyField(Signature, unique=True, on_delete='CASCADE')
 
 
 class ToolboxDependency(Dependency):
@@ -389,7 +412,7 @@ class SolutionTag(Tag):
 class SolutionSignature(BaseModel):
     """Signatures for Solutions."""
     solution = ForeignKeyField(Solution, related_name="signatures")
-    signature = ForeignKeyField(Signature, unique=True)
+    signature = ForeignKeyField(Signature, unique=True, on_delete='CASCADE')
 
 
 class SolutionDependency(Dependency):

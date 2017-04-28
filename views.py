@@ -480,7 +480,7 @@ class EntryView(ResourceView):
             if best == "application/json":
                 key = pluralise(entry_type(self.model))
                 return jsonldify({
-                    key: [self.summary(entry) for entry in entries]
+                    key: [model_to_dict(entry) for entry in entries]
                 })
             elif best == "text/html":
                 return render_template(
@@ -694,30 +694,58 @@ class SignatureView(ResourceView):
     @http_auth_required
     def post(self):
         data = request.get_json()
-        digest = data.get('digest')
-        user_key = data.get('user_key')
+        entry_hash = data.get('entry_hash')
+        signature = data.get('signature')
+        public_key = data.get('public_key')
         uri = data.get('entry_id')
-        if digest is None or user_key is None or uri is None:
+        if entry_hash is None or signature is None or \
+           public_key is None or uri is None:
             abort(400)
         # Find the Entry to link it to
         entry_dict = requests.get(uri + '?_include_id=True').json()
         if not entry_dict:
             abort(404)
-        if verify_signature(digest, entry_dict['entry_hash'], user_key):
+        # Make sure their hash is the same as our hash for the requested entry.
+        if entry_hash != entry_dict['entry_hash']:
+            return "Client hash does not match saved hash.", 400
+        verified, verify_msg = verify_signature(signature,
+                                                entry_hash,
+                                                public_key)
+        if verified:
             rel_class, rel_field = signature_relation(entry_dict)
             if rel_class:
-                signature = Signature(digest=digest,
-                                      user_key=user_key)
+                sig_instance = Signature(signature=signature,
+                                         public_key=public_key)
                 # Add the metadata
-                signature.user_id = User.get(User.id == current_user.id)
-                rel = rel_class(signature=signature)
+                sig_instance.user_id = User.get(User.id == current_user.id)
+                sig_instance.save()
+                # Link signature to entry
+                rel = rel_class(signature=sig_instance)
                 setattr(rel, rel_field, entry_dict['id'])
-                signature.save()
-                url = model_url(signature)
+                rel.save()
+                url = model_url(sig_instance)
                 resp = make_response(url, 201)
                 resp.location = url
                 return resp
-        abort(404)
+
+        return "Failed to verify signature with public key.", 400
+
+    @http_auth_required
+    def delete(self, signature_id):
+        """Delete the signature."""
+        if signature_id is not None:
+            signature = Signature.get(Signature.id == signature_id)
+            if not signature:
+                abort(404)
+
+            # Clean up entry relation first
+            # TODO: Push delete cascades into the db schema
+            entry_rel = signature.get_entry_rel()
+            entry_rel.delete_instance()
+            rows = signature.delete_instance()
+            return "Deleted {} entry".format(rows), 200
+
+        return "Invalid signature_id ({})".format(signature_id), 400
 
 
 # Dispatch to json/html views
