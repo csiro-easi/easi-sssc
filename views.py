@@ -1,10 +1,15 @@
 from flask import (Blueprint, request, render_template, url_for, jsonify,
                    make_response, abort)
 from flask.views import MethodView
+from flask_security import current_user
+from flask_security.decorators import http_auth_required
 from markdown import markdown
 from app import app, entry_hash
 from models import db, Toolbox, Entry, Problem, Solution, text_search, User, \
-    License, BaseModel, Role, Dependency
+    License, BaseModel, Role, Dependency, Signature, \
+    ProblemSignature, ToolboxSignature, SolutionSignature
+import requests
+from signatures import verify_signature
 from namespaces import PROV
 from werkzeug.exceptions import NotAcceptable
 from peewee import SelectQuery, DoesNotExist
@@ -22,6 +27,9 @@ def first_setup():
 
 
 # These will be updated with model views after those are defined.
+#
+# Keys are model classes.
+# Values are tuples (endpoint, url, pk, pk_type)
 _model_api = {}
 
 
@@ -61,9 +69,6 @@ def model_url(model, version=None, pinned=False, endpoint=None, **kwargs):
         model_class = type(model)
         model_version = (model.version if hasattr(model, 'version')
                          else None)
-        # Is it an external model?
-        if model_class not in _model_api:
-            return None
         args = {model_pk(model_class): model_id}
         # Is it an Entry?
         if issubclass(model_class, Entry):
@@ -124,11 +129,14 @@ _default_refs = set([
     Problem.latest,
     Problem.solutions,
     Problem.versions,
+    Problem.signatures,
     Toolbox.latest,
     Toolbox.versions,
+    Toolbox.signatures,
     Solution.latest,
     Solution.problem,
-    Solution.versions
+    Solution.versions,
+    Solution.signatures
 ])
 
 # User details shouldn't be included in most client interactions.
@@ -492,7 +500,10 @@ class EntryView(ResourceView):
             if request.url.endswith('/prov'):
                 return self.prov_view(entry)
             elif best == "application/json":
-                return jsonldify(self.for_api(entry))
+                return jsonldify(model_to_dict(
+                    entry,
+                    include_ids=request.args.get('_include_id', False)
+                ))
             elif best == "text/html":
                 return render_template(self.detail_template,
                                        **self.detail_template_args(entry))
@@ -533,14 +544,6 @@ class EntryView(ResourceView):
     def detail_template_args(self, entry):
         return dict(entry=entry,
                     entry_type=type(entry).__name__)
-
-    def summary(self, entry):
-        """Return a dict view summarizing entry (e.g. for listings)."""
-        return model_to_dict(entry)
-
-    def for_api(self, entry):
-        """Return a dict view of entry suitable for JSON."""
-        return self.summary(entry)
 
     def get_one(self, entry_id, version=None):
         """Query model for the entry with id and optionally a version.
@@ -611,7 +614,7 @@ class UserView(ResourceView):
             users = User.select()
             if best == "application/json":
                 return jsonldify(dict(
-                    users=[self.for_api(user) for user in users]
+                    users=[model_to_dict(user) for user in users]
                 ))
             elif best == "text/html":
                 return render_template('user_list.html', users=users)
@@ -635,7 +638,7 @@ class UserView(ResourceView):
                            .join(User)
                            .where(User.id == user.id))
             if best == "application/json":
-                return jsonldify(self.for_api(user))
+                return jsonldify(model_to_dict(user))
             elif best == "text/html":
                 return render_template(
                     'user_detail.html',
@@ -651,19 +654,81 @@ class LicenseView(ResourceView):
         if license_id is None:
             licenses = License.select()
             return jsonldify(dict(
-                licenses=[self.for_api(license) for license in licenses]
+                licenses=[model_to_dict(license) for license in licenses]
             ))
         else:
             license = License.get(License.id == license_id)
             if not license:
                 abort(404)
-            return jsonldify(self.for_api(license))
+            return jsonldify(model_to_dict(license))
+
+
+_signature_relations = {
+    'sssc:Problem': (ProblemSignature, 'problem'),
+    'sssc:Toolbox': (ToolboxSignature, 'toolbox'),
+    'sssc:Solution': (SolutionSignature, 'solution')
+}
+
+
+def signature_relation(entry_dict):
+    """Return the signature relation for entry and fk name."""
+    if entry_dict:
+        for t in entry_dict['@type']:
+            if t in _signature_relations:
+                return _signature_relations[t]
+
+
+class SignatureView(ResourceView):
+    def get(self, signature_id):
+        if signature_id is None:
+            signatures = Signature.select()
+            return jsonldify(dict(
+                signatures=[model_to_dict(s) for s in signatures]
+            ))
+        else:
+            signature = Signature.get(Signature.id == signature_id)
+            if not signature:
+                abort(404)
+            return jsonldify(model_to_dict(signature))
+
+    @http_auth_required
+    def post(self):
+        data = request.get_json()
+        digest = data.get('digest')
+        user_key = data.get('user_key')
+        uri = data.get('entry_id')
+        if digest is None or user_key is None or uri is None:
+            abort(400)
+        # Find the Entry to link it to
+        entry_dict = requests.get(uri + '?_include_id=True').json()
+        if not entry_dict:
+            abort(404)
+        if verify_signature(digest, entry_dict['entry_hash'], user_key):
+            rel_class, rel_field = signature_relation(entry_dict)
+            if rel_class:
+                signature = Signature(digest=digest,
+                                      user_key=user_key)
+                # Add the metadata
+                signature.user_id = User.get(User.id == current_user.id)
+                rel = rel_class(signature=signature)
+                setattr(rel, rel_field, entry_dict['id'])
+                signature.save()
+                url = model_url(signature)
+                resp = make_response(url, 201)
+                resp.location = url
+                return resp
+        abort(404)
 
 
 # Dispatch to json/html views
 def register_api(model, view, endpoint, url, pk='id', pk_type='int'):
     """Register the rules for a model api."""
-    _model_api[model] = (endpoint, url, pk, pk_type)
+    if isinstance(model, list):
+        models = model
+    else:
+        models = [model]
+    for m in models:
+        _model_api[m] = (endpoint, url, pk, pk_type)
     view_func = view.as_view(endpoint)
     site.add_url_rule(url, defaults={pk: None},
                       view_func=view_func, methods=['GET'])
@@ -680,6 +745,8 @@ register_api(Problem, ProblemView, 'problem_api', '/problems/', pk='entry_id')
 register_api(Solution, SolutionView, 'solution_api', '/solutions/', pk='entry_id')
 register_api(User, UserView, 'user_api', '/users/', pk='user_id')
 register_api(License, LicenseView, 'license_api', '/licenses/', pk='license_id')
+register_api([ProblemSignature, ToolboxSignature, SolutionSignature, Signature],
+             SignatureView, 'signature_api', '/signatures/', pk='signature_id')
 
 
 @site.route('/search')

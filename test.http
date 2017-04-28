@@ -1,0 +1,25 @@
+# No auth
+GET http://localhost:5000/problems/1
+
+# Basic support
+:example-auth := (format "Basic %s" (base64-encode-string (format "%s:%s" "geoffrey.squire@csiro.au" "foobar")))
+GET http://localhost:5000/problems/
+Authorization: :example-auth
+
+# Test signature
+:example-auth := (format "Basic %s" (base64-encode-string (format "%s:%s" "geoffrey.squire@csiro.au" "foobar")))
+POST http://localhost:5000/signatures/
+Authorization: :example-auth
+Content-Type: application/json
+
+{
+  "entry_id": "http://localhost:5000/problems/1",
+  "digest": "4c55bf7f1f00390fa3edaecce654fa34eac605e5cdc906f69609448de36b97c1",
+  "user_key": "sldfkjslfkjsdflskdjflsdkfjsldkfjsldkfj"
+}
+
+# Signatures
+GET http://localhost:5000/signatures/
+
+# A signature
+GET http://localhost:5000/signatures/4
