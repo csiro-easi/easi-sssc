@@ -1,6 +1,9 @@
 # Basic auth
 :example-auth := (format "Basic %s" (base64-encode-string (format "%s:%s" "geoffrey.squire@csiro.au" "foobar")))
 
+# Get all problems
+GET http://localhost:5000/problems/
+
 # Get a problem to sign
 GET http://localhost:5000/problems/1
 

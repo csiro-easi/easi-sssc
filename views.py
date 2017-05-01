@@ -441,9 +441,7 @@ class ResourceView(MethodView):
 
     def prov_view(self, entry):
         # Build the RDF prov graph
-        g = Graph()
-        for t in self.graph(entry):
-            g.add(t)
+        g, subject = self.graph(entry)
         # Return the appropriate serialization
         matchable = ["application/ld+json",
                      "application/json",
@@ -465,7 +463,20 @@ class ResourceView(MethodView):
         return resp
 
     def graph(self, entry):
-        return entry.semantic_types(model_url(entry))
+        """Return the RDF graph for this resource, and the subject reference.
+
+        If it's an identified object, use its URI as the subject (a URIRef) for
+        the graph, otherwise create a new BNode to represent it.
+
+        Either way return a tuple (graph, subject).
+
+        """
+        subject = model_url(entry)
+        if subject:
+            subject = URIRef(subject)
+        else:
+            subject = BNode()
+        return entry.semantic_types(subject), subject
 
 
 class EntryView(ResourceView):
@@ -589,15 +600,14 @@ class SolutionView(EntryView):
         return query
 
     def graph(self, entry):
-        g = super().graph(entry)
-        solution = URIRef(model_url(entry))
+        g, solution = super().graph(entry)
         for t in entry.deps:
             if isinstance(t, Toolbox):
                 g.add((solution, PROV.wasDerivedFrom, URIRef(model_url(t))))
         g.add((solution,
                PROV.wasDerivedFrom,
                URIRef(model_url(entry.problem))))
-        return g
+        return g, solution
 
 
 class ToolboxView(EntryView):
