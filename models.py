@@ -136,6 +136,12 @@ class User(BaseModel, UserMixin):
 
     entries = property(user_entries)
 
+    current_public_key = property(
+        lambda self: self.public_keys.order_by(
+            PublicKey.registered_at.desc()
+        ).get()
+    )
+
     _semantic_types = [PROV.Agent, PROV.Person]
 
     def __unicode__(self):
@@ -154,6 +160,13 @@ class UserRoles(BaseModel):
             # user/role pairs should be unique
             (('user', 'role'), True),
         )
+
+
+class PublicKey(BaseModel):
+    """Public keys registered with a User."""
+    user = ForeignKeyField(User, related_name="public_keys")
+    registered_at = DateTimeField(default=datetime.now)
+    key = TextField()
 
 
 class Signature(BaseModel):
@@ -517,7 +530,7 @@ def index_entry(entry):
 
 
 _TABLES = [User, Role, UserRoles, License, Problem, Toolbox, Signature,
-           ToolboxDependency, Solution, SolutionDependency,
+           ToolboxDependency, Solution, SolutionDependency, PublicKey,
            ToolboxVar, SolutionVar, Source, SolutionImage,
            ToolboxImage, ProblemSignature, ToolboxSignature, SolutionSignature,
            ProblemTag, ToolboxTag, SolutionTag]

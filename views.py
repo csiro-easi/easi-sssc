@@ -148,7 +148,8 @@ _default_exclude = set([
     User.signatures,
     User.problems,
     User.solutions,
-    User.toolboxes
+    User.toolboxes,
+    User.public_keys
 ])
 
 
@@ -696,10 +697,8 @@ class SignatureView(ResourceView):
         data = request.get_json()
         entry_hash = data.get('entry_hash')
         signature = data.get('signature')
-        public_key = data.get('public_key')
         uri = data.get('entry_id')
-        if entry_hash is None or signature is None or \
-           public_key is None or uri is None:
+        if entry_hash is None or signature is None or uri is None:
             abort(400)
         # Find the Entry to link it to
         entry_dict = requests.get(uri + '?_include_id=True').json()
@@ -708,6 +707,8 @@ class SignatureView(ResourceView):
         # Make sure their hash is the same as our hash for the requested entry.
         if entry_hash != entry_dict['entry_hash']:
             return "Client hash does not match saved hash.", 400
+        # Verify the signature using the user's current public key
+        public_key = current_user.current_public_key.key
         verified, verify_msg = verify_signature(signature,
                                                 entry_hash,
                                                 public_key)

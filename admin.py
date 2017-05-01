@@ -3,15 +3,17 @@ from flask_admin import Admin, helpers as admin_helpers, expose
 from flask_admin.contrib.peewee import ModelView
 from flask_admin.contrib.peewee.form import CustomModelConverter
 from flask_admin.form import BaseForm
+from flask_admin.model.form import InlineFormAdmin
 from flask_security import current_user
-from wtforms import fields
+from wtforms import fields, TextAreaField, PasswordField
+from wtforms.widgets import TextArea
 from app import app
 from security import security, is_admin, is_user
 from models import Problem, Solution, Toolbox, User, UserRoles, \
     SolutionDependency, ToolboxDependency, \
     SolutionImage, ToolboxImage, \
     SolutionVar, ToolboxVar, JsonField, Entry, \
-    ProblemTag, ToolboxTag, SolutionTag
+    ProblemTag, ToolboxTag, SolutionTag, PublicKey
 from views import hash_entry
 
 admin = Admin(app)
@@ -79,10 +81,48 @@ class UserAdmin(ProtectedModelView):
         return is_admin()
 
 
+class PublicKeyInlineAdmin(InlineFormAdmin):
+    form_excluded_columns = ['registered_at']
+    form_rules = ['key']
+    form_widget_args = {
+        'key': {
+            'rows': 5,
+            'cols': 100,
+            'style': 'width: auto;'
+        }
+    }
+
+
+class PublicKeyWidget(TextArea):
+    def __init__(self, **kwargs):
+        self.widget_overrides = dict(kwargs)
+        super().__init__()
+
+    def __call__(self, field, **kwargs):
+        for k, v in self.widget_overrides.items():
+            kwargs[k] = v
+        return super().__call__(field, **kwargs)
+
+
 class UserProfile(ProtectedModelView):
     can_create = False
     can_delete = False
     form_excluded_columns = ['id', 'active', 'confirmed_at', 'password']
+    inline_models = [
+        (PublicKey, dict(
+            form_excluded_columns=['registered_at'],
+            form_args={
+                'key': {
+                    'widget': PublicKeyWidget(
+                        rows=5,
+                        cols=100,
+                        style='width: auto'
+                    )
+                }
+            }
+        ))
+    ]
+    # inline_models = [PublicKeyInlineAdmin(PublicKey)]
 
     @expose('/')
     def index_view(self):

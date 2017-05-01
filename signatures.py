@@ -10,7 +10,7 @@ def verify_signature(signature, entry_hash, user_key):
     """
     signature = binascii.unhexlify(signature)
     entry_hash = entry_hash.encode()
-    pubkey = rsa.PublicKey.load_pkcs1(user_key)
+    pubkey = rsa.PublicKey.load_pkcs1(user_key.encode())
 
     # Check signature is valid using user_key
     try:
