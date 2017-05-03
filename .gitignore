@@ -2,3 +2,4 @@ __pycache__/
 /scm.db
 .idea/
 *.pyc
+flycheck_models.py
