@@ -64,5 +64,13 @@ Content-Type: application/json
   "key": "Not a valid Public Key! With JSON and PUT!"
 }
 
+# New public key for user, now with extra plain text
+PUT http://localhost:5000/users/1/public_key
+Authorization: :example-auth
+Content-Type: text/plain
+
+"Not a valid Public Key! With plain text and PUT!"
+
+
 # Can we still get prov?
 GET http://localhost:5000/users/1/prov
