@@ -136,7 +136,7 @@ class User(BaseModel, UserMixin):
 
     entries = property(user_entries)
 
-    current_public_key = property(
+    public_key = property(
         lambda self: self.public_keys.order_by(
             PublicKey.registered_at.desc()
         ).get()

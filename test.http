@@ -25,4 +25,44 @@ GET http://localhost:5000/signatures/
 DELETE http://localhost:5000/signatures/1
 Authorization: :example-auth
 
+# Info for user
+GET http://localhost:5000/users/1
 
+# New public key for user, using json-merge-patch
+PATCH http://localhost:5000/users/1
+Authorization: :example-auth
+Content-Type: application/merge-patch+json
+
+{
+  "name": "Geoffrey Squire",
+  "public_key": "Not a valid Public Key! again! and again!"
+}
+
+# New public key for user, using json
+PATCH http://localhost:5000/users/1
+Authorization: :example-auth
+Content-Type: application/json
+
+{
+  "public_key": "Not a valid Public Key! With JSON!"
+}
+
+# New public key for user, using unknown type.
+PATCH http://localhost:5000/users/1
+Authorization: :example-auth
+
+{
+  "public_key": "Not a valid Public Key! No content type!"
+}
+
+# New public key for user
+PUT http://localhost:5000/users/1/public_key
+Authorization: :example-auth
+Content-Type: application/json
+
+{
+  "key": "Not a valid Public Key! With JSON and PUT!"
+}
+
+# Can we still get prov?
+GET http://localhost:5000/users/1/prov

@@ -2,13 +2,15 @@ from flask import (Blueprint, request, render_template, url_for, jsonify,
                    make_response, abort)
 from flask.views import MethodView
 from flask_security import current_user
-from flask_security.decorators import http_auth_required
+from flask_security.decorators import http_auth_required, roles_accepted
 from markdown import markdown
+from functools import wraps
 from app import app, entry_hash
 from models import db, Toolbox, Entry, Problem, Solution, text_search, User, \
-    License, BaseModel, Role, Dependency, Signature, \
+    License, BaseModel, Role, Dependency, Signature, PublicKey, \
     ProblemSignature, ToolboxSignature, SolutionSignature
 import requests
+from security import is_admin, is_user
 from signatures import verify_signature
 from namespaces import PROV
 from werkzeug.exceptions import NotAcceptable
@@ -121,7 +123,8 @@ _internal_identifiers = set([
     Toolbox.id,
     Solution.id,
     License.id,
-    Dependency.id
+    Dependency.id,
+    PublicKey.id
 ])
 
 # These fields should usually be returned as refs, not nested
@@ -161,9 +164,8 @@ def _clone_set(s, default=None):
     return set()
 
 
-def model_to_dict(model, seen=None, exclude=None, refs=None,
-                  max_depth=None, include_nulls=False,
-                  include_ids=False):
+def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
+                  max_depth=None, include_nulls=False, include_ids=False):
     """Return a dict view of model, suitable for the API. """
     max_depth = -1 if max_depth is None else max_depth
 
@@ -215,8 +217,11 @@ def model_to_dict(model, seen=None, exclude=None, refs=None,
                         rel_obj,
                         seen=seen,
                         exclude=exclude,
+                        extra=extra,
                         refs=refs,
-                        max_depth=max_depth - 1
+                        max_depth=max_depth - 1,
+                        include_nulls=include_nulls,
+                        include_ids=include_ids
                     )
                 else:
                     # Replace with external reference
@@ -248,10 +253,35 @@ def model_to_dict(model, seen=None, exclude=None, refs=None,
                     rel_obj,
                     seen=seen,
                     exclude=exclude,
+                    extra=extra,
                     refs=refs,
-                    max_depth=max_depth - 1
+                    max_depth=max_depth - 1,
+                    include_nulls=include_nulls,
+                    include_ids=include_ids
                 ))
         data[related_name] = accum
+
+    # Add any extra fields
+    if extra:
+        for prop in extra:
+            value = getattr(model, prop, None)
+            if value is not None:
+                if isinstance(value, BaseModel):
+                    # If it's got any references to model, exclude them
+                    ref = value._meta.rel_for_model(model_class)
+                    if not ref:
+                        ref = value._meta.reverse_rel_for_model(model_class)
+                    if ref:
+                        seen.add(ref)
+                    value = model_to_dict(value,
+                                          seen=seen,
+                                          exclude=exclude,
+                                          extra=extra,
+                                          refs=refs,
+                                          max_depth=max_depth - 1,
+                                          include_nulls=include_nulls,
+                                          include_ids=include_ids)
+                data[prop] = value
 
     return data
 
@@ -426,6 +456,18 @@ def checked_field(entry, field, hash_field=None):
     }
 
 
+def require_mimetypes(*mimetypes):
+    """Decorator that specifies valid mimetypes for view func."""
+    def wrapper(fn):
+        @wraps(fn)
+        def decorated_view(*args, **kwargs):
+            if request.content_type not in mimetypes:
+                abort(415)
+            return fn(*args, **kwargs)
+        return decorated_view
+    return wrapper
+
+
 class ResourceView(MethodView):
     prov_context = {
         "Entity": "http://www.w3.org/ns/prov#Entity",
@@ -438,6 +480,8 @@ class ResourceView(MethodView):
             "@type": "@id"
         }
     }
+
+    api_fields = {}
 
     def prov_view(self, entry):
         # Build the RDF prov graph
@@ -477,6 +521,67 @@ class ResourceView(MethodView):
         else:
             subject = BNode()
         return entry.semantic_types(subject), subject
+
+    def is_update_allowed(resource, key):
+        """Return True if current user can update key for resource.
+
+        Base requirement is for an authenticated admin user.
+
+        """
+        return (current_user.is_active and
+                current_user.is_authenticated and
+                is_admin())
+
+    def update_resource(self, resource, data):
+        """Update resource instance using entries in data dict.
+
+        Default behaviour is to match keys in data to fields on resource, and
+        update with the corresponding values from data.
+
+        For field specific handling, or to implement an API field that does not
+        directly correspond to a model field, subclasses can provide a method
+        named "_handle_update_<key>". If such a method exists, it will be
+        called as self._handle_update_<key>(resource, data, key) instead of the
+        default behaviour.
+
+        """
+        if resource is None:
+            app.logger.warn('Null resource passed to ResourceView.update_resource')
+            return
+        if not data:
+            return
+
+        for key in data:
+            if self.is_update_allowed(resource, key):
+                # Check for handler or use default
+                handler = getattr(self, '_handle_update_' + key, None)
+                if handler is None:
+                    handler = self._handle_update
+                handler(resource, data, key)
+
+        # No exceptions raised? Save the resource.
+        resource.save()
+
+    def _handle_update(self, resource, data, key):
+        """Default handler for updating key on resource using data.
+
+        Find field on resource with name == key, then set value of that field
+        on resource to data[key].
+
+        """
+        if key in resource._meta.fields:
+            # If it's a foreign key, find the corresponding resource, otherwise
+            # update the value.
+            if key in resource._meta.rel:
+                raise NotImplementedError
+            else:
+                setattr(resource, key, data[key])
+        elif key in resource._meta.reverse_rel:
+            # Merge in values for keys
+            raise NotImplementedError
+        else:
+            raise KeyError('Unknown field "{}" in {} API.'
+                           .format(key, type(resource).__name__))
 
 
 class EntryView(ResourceView):
@@ -616,6 +721,8 @@ class ToolboxView(EntryView):
 
 
 class UserView(ResourceView):
+    modifiable_fields = ['name', 'public_key']
+
     def get(self, user_id):
         best = request.accept_mimetypes.best_match(["application/json",
                                                     "text/html"])
@@ -649,7 +756,7 @@ class UserView(ResourceView):
                            .join(User)
                            .where(User.id == user.id))
             if best == "application/json":
-                return jsonldify(model_to_dict(user))
+                return jsonldify(model_to_dict(user, extra=['public_key']))
             elif best == "text/html":
                 return render_template(
                     'user_detail.html',
@@ -658,6 +765,87 @@ class UserView(ResourceView):
                 )
             else:
                 return NotAcceptable
+
+    def post(self):
+        """Register a new user."""
+        pass
+
+    @http_auth_required
+    @require_mimetypes('application/json',
+                       'application/merge-patch+json')
+    def patch(self, user_id):
+        """Update an existing user.
+
+        Can only be used to update name or public key.
+
+        """
+        # Make sure they specified a user...
+        if user_id is None:
+            return 'PUT request is invalid for /users collection', 400, None
+
+        # ...that exists.
+        user = User.get(User.id == user_id)
+        if not user:
+            abort(404)
+
+        # Make sure we have json, and parse request data for updates
+        data = request.get_json()
+        if not data:
+            return 'No JSON content found in request.', 400, None
+
+        # Update the resource
+        self.update_resource(user, data)
+        return self.get(user_id=user_id)
+
+    @http_auth_required
+    @roles_accepted('admin', 'user')
+    @require_mimetypes('application/json', 'text/plain')
+    def put(self, user_id, prop=None):
+        """Set a new public key for user."""
+        if user_id is None:
+            abort(400)
+
+        if prop != 'public_key':
+            raise NotImplementedError
+
+        user = User.get(User.id == user_id)
+        if not user:
+            abort(404)
+
+        if not self.is_update_allowed(user, prop):
+            abort(403)
+
+        if request.is_json:
+            data = request.get_json()
+            if not data:
+                return 'No JSON content found in request.', 400, None
+            key_data = data.get('key')
+        else:
+            key_data = request.data
+
+        new_key = PublicKey(user=user, key=key_data)
+        new_key.save()
+        return self.get(user_id=user_id)
+
+    def is_update_allowed(self, user, key):
+        """Only the user themselves (or an admin) can update some fields"""
+        return (current_user.is_authenticated and
+                current_user.is_active and
+                (is_admin() or current_user.id == user.id) and
+                key in self.modifiable_fields)
+
+    def _handle_update_public_key(self, user, data, key):
+        """Create new PublicKey resource as the current key for user."""
+        if key != 'public_key':
+            raise ValueError('Invalid key () used to invoke UserView._handle_'
+                             'update_public_key'.format(key))
+
+        key_data = data[key]
+        if not key_data:
+            raise ValueError('Empty public key in user PATCH request.')
+
+        new_key = PublicKey(user=user, key=key_data)
+        new_key.save()
 
 
 class LicenseView(ResourceView):
@@ -718,7 +906,7 @@ class SignatureView(ResourceView):
         if entry_hash != entry_dict['entry_hash']:
             return "Client hash does not match saved hash.", 400
         # Verify the signature using the user's current public key
-        public_key = current_user.current_public_key.key
+        public_key = current_user.public_key.key
         verified, verify_msg = verify_signature(signature,
                                                 entry_hash,
                                                 public_key)
@@ -773,7 +961,9 @@ def register_api(model, view, endpoint, url, pk='id', pk_type='int'):
                       view_func=view_func, methods=['GET'])
     site.add_url_rule(url, view_func=view_func, methods=['POST'])
     site.add_url_rule('{}<{}:{}>'.format(url, pk_type, pk),
-                      view_func=view_func, methods=['GET', 'PUT', 'DELETE'])
+                      view_func=view_func, methods=['GET', 'PATCH', 'DELETE'])
+    site.add_url_rule('{}<{}:{}>/<{}:{}>'.format(url, pk_type, pk, 'string', 'prop'),
+                      view_func=view_func, methods=['PUT'])
     prov_view_func = view.as_view(endpoint + '_prov')
     site.add_url_rule('{}<{}:{}>/prov'.format(url, pk_type, pk),
                       view_func=prov_view_func, methods=['GET'])
