@@ -181,8 +181,10 @@ class Signature(BaseModel):
     user_id = ForeignKeyField(User, null=True, related_name='signatures')
     public_key = CharField(null=True)
 
+    entry = property(lambda self: self.get_entry_rel().entry)
+
     def get_entry_rel(self):
-        """Return the Entry this is a signature for."""
+        """Return the Entry relation this is a signature for."""
         if self.problemsignature_set.count() == 1:
             return self.problemsignature_set[0]
         if self.toolboxsignature_set.count() == 1:
@@ -190,19 +192,6 @@ class Signature(BaseModel):
         if self.solutionsignature_set.count() == 1:
             return self.solutionsignature_set[0]
         return None
-
-    @staticmethod
-    def add_signature(signature, user_id, public_key, entry):
-        """Add a new Signature for entry and return the new instance.
-
-        Ensure integrity by limiting a signature to one entry only.
-
-        """
-        instance = Signature(signature=signature,
-                             user_id=user_id,
-                             public_key=public_key)
-        instance.save()
-
 
 
 class Entry(BaseModel):
@@ -327,6 +316,7 @@ class ProblemSignature(BaseModel):
     """Signatures for Problems."""
     problem = ForeignKeyField(Problem, related_name="signatures")
     signature = ForeignKeyField(Signature, unique=True, on_delete='CASCADE')
+    entry = property(lambda self: self.problem)
 
 
 class Source(BaseModel):
@@ -389,6 +379,7 @@ class ToolboxSignature(BaseModel):
     """Signatures for Toolboxs."""
     toolbox = ForeignKeyField(Toolbox, related_name="signatures")
     signature = ForeignKeyField(Signature, unique=True, on_delete='CASCADE')
+    entry = property(lambda self: self.toolbox)
 
 
 class ToolboxDependency(Dependency):
@@ -426,6 +417,7 @@ class SolutionSignature(BaseModel):
     """Signatures for Solutions."""
     solution = ForeignKeyField(Solution, related_name="signatures")
     signature = ForeignKeyField(Signature, unique=True, on_delete='CASCADE')
+    entry = property(lambda self: self.solution)
 
 
 class SolutionDependency(Dependency):

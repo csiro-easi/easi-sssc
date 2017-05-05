@@ -113,7 +113,10 @@ _hidden_fields = set([
     User.password,
     Problem.problemindex_set,
     Solution.solutionindex_set,
-    Toolbox.toolboxindex_set
+    Toolbox.toolboxindex_set,
+    Signature.problemsignature_set,
+    Signature.toolboxsignature_set,
+    Signature.solutionsignature_set
 ])
 
 _internal_identifiers = set([
@@ -267,20 +270,24 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
             value = getattr(model, prop, None)
             if value is not None:
                 if isinstance(value, BaseModel):
-                    # If it's got any references to model, exclude them
-                    ref = value._meta.rel_for_model(model_class)
-                    if not ref:
-                        ref = value._meta.reverse_rel_for_model(model_class)
-                    if ref:
-                        seen.add(ref)
-                    value = model_to_dict(value,
-                                          seen=seen,
-                                          exclude=exclude,
-                                          extra=extra,
-                                          refs=refs,
-                                          max_depth=max_depth - 1,
-                                          include_nulls=include_nulls,
-                                          include_ids=include_ids)
+                    # Should this be a reference?
+                    if prop in refs:
+                        value = model_url(value)
+                    else:
+                        # If it's got any references to model, exclude them
+                        ref = value._meta.rel_for_model(model_class)
+                        if not ref:
+                            ref = value._meta.reverse_rel_for_model(model_class)
+                        if ref:
+                            seen.add(ref)
+                        value = model_to_dict(value,
+                                              seen=seen,
+                                              exclude=exclude,
+                                              extra=extra,
+                                              refs=refs,
+                                              max_depth=max_depth - 1,
+                                              include_nulls=include_nulls,
+                                              include_ids=include_ids)
                 data[prop] = value
 
     return data
@@ -919,7 +926,14 @@ class SignatureView(ResourceView):
             signature = Signature.get(Signature.id == signature_id)
             if not signature:
                 abort(404)
-            return jsonldify(model_to_dict(signature))
+            best = best_mimetype('application/json', 'text/html')
+            if best == 'text/html':
+                return render_template('signature_detail.html',
+                                       signature=signature)
+            else:
+                return jsonldify(model_to_dict(signature,
+                                               extra=['entry'],
+                                               refs=['entry']))
 
     @http_auth_required
     def post(self):

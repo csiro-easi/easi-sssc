@@ -52,8 +52,28 @@
           <dd>{{ entry.version }}</dd>
           <dt>Keywords</dt>
           <dd>{{ entry.keywords }}</dd>
+
+          {% if entry.signatures %}
+          <dt>Signed by</dt>
+          <dd>
+            <ul class="list-unstyled">
+            {% for entrysig in entry.signatures %}
+            {% with signature = entrysig.signature %}
+            {% with sigurl = model_url(signature) %}
+            <li>
+              <a href="{{sigurl}}">{{signature.user_id.name}} ({{signature.created_at}})</a>
+            </li>
+            {% endwith %}
+            {% endwith %}
+            {% endfor %}
+            </ul>
+          </dd>
+          {% endif %}
+
         </dl>
       </div>
     </div>
+
   </div>
+
 </div>

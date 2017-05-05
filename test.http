@@ -14,12 +14,15 @@ Content-Type: application/json
 
 {
   "entry_id": "http://localhost:5000/problems/1",
-  "entry_hash": "67d3d48245a922453af10a2395e10119239b754d8e18ddddf47b2562cbcc806c",
-  "signature": "63f950d5198ff830351cfc6d934edfe1ca1d0378be57cadc498a07331d46b1db1ec9afdc75eb297c43b6ea009052555f86644a0e0dc06272936356b8c4e696e8893efceb6866531742cf6b395ccb3525cad662dba0b0b28750469a8cd6672762470fdf1f1a5e6568682462526701b31e0367eac0dc97c05588779a367fdd9f3d8aa979f4cbd57bb10b32aaf0278acfd57a56151a392f2842b3267c39af723f881ab3f7557531963b3ff576a2452695f6a81a6230c879cd5992f94889d93e3ff10df5d93416bdffbcf4995704651081b638afb253ea981c58bce1b3cb6c65af4004f8f894737c4355c91fce866a81e84fe9ef07caa6633be7466e204782ab1b3f"
+  "entry_hash": "ee9faf4999588b491270de4a4fee02363e39594227dec5b0fcc3c8e31311a39e",
+  "signature": "3de784a7f0256b23d1559cf115cf8a4e7c8d633f8273ab7f6dd2504c745a1f1bcdf5698d540e5ffb761a93f29348e9f9fa6cb797e25fe249d1e14c987a42b25b857c30ec045bf30105f0bba0d851cf0f06f923916bae66639d980d64ff5ccf4ecde2eb750f90633ba33cfc55fe6b840184d197f8eba8403edeb5a2dd46b3020fda35198acb2e7c3faceaeab923a306c80e0f69f171815d3e699a6860ed1653c4a6f15436f13c092966a2383f9d9a014185902c3a54134e07b25c76e75289c93de2df19d9756aecab71fc65b424c4a63a4605093321239897e991166183fd48a0d0b58a5b6455d976b55528ae86ff07201197a1bc32ec6f15a908fe11d68e5269"
 }
 
 # Signatures
 GET http://localhost:5000/signatures/
+
+# Signatures
+GET http://localhost:5000/signatures/1
 
 # Delete the signature
 DELETE http://localhost:5000/signatures/1
@@ -34,8 +37,7 @@ Authorization: :example-auth
 Content-Type: application/merge-patch+json
 
 {
-  "name": "Geoffrey Squire",
-  "public_key": "Not a valid Public Key! again! and again!"
+  "public_key": "-----BEGIN RSA PUBLIC KEY-----\nMIIBCgKCAQEAtkDV7IsEmQKta0tGv24BtxcSXwExPKcet4euf3WrgnXasvpPSh8i\nLE1vGspxQPCNwiiHal6kMPfEK1s9kN5wkwq5Fuw8gMCvDvKEkrI+zDz5kk4JvPMT\nT5rec8QUeHtMGX5Gbfg/DrdXT7UUORu0C1rLHb9h+5qOqJHS2G0a5CCLtP1/tc4y\nuBvzAktbu6j9zzQ8mh+qmU+qojJxev3OL4uc4rnYwOuZsHHoGkcNJbTID5em744Y\nlRh4AFiCHOfOysv7OUNXxeytVBE4fgI4gIFpOOOYaFtvgSDMUqy5oM7H9uC7YdXV\n4M5rD4raixHtou89nYSwlh151TNhVr/ejQIDAQAB\n-----END RSA PUBLIC KEY-----\n"
 }
 
 # New public key for user, using json
