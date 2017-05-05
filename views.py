@@ -799,7 +799,9 @@ class UserView(ResourceView):
                 return render_template(
                     'user_detail.html',
                     user=user,
-                    entries=entries
+                    entries=sorted(entries,
+                                   key=lambda e: e.created_at,
+                                   reverse=True)
                 )
             else:
                 return NotAcceptable
@@ -951,10 +953,10 @@ class SignatureView(ResourceView):
         if entry_hash != entry_dict['entry_hash']:
             return "Client hash does not match saved hash.", 400
         # Verify the signature using the user's current public key
-        public_key = current_user.public_key.key
+        public_key = current_user.public_key
         verified, verify_msg = verify_signature(signature,
                                                 entry_hash,
-                                                public_key)
+                                                public_key.key)
         if verified:
             rel_class, rel_field = signature_relation(entry_dict)
             if rel_class:

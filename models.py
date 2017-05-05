@@ -179,7 +179,7 @@ class Signature(BaseModel):
     signature = CharField()
     created_at = DateTimeField(default=datetime.now)
     user_id = ForeignKeyField(User, null=True, related_name='signatures')
-    public_key = CharField(null=True)
+    public_key = ForeignKeyField(PublicKey, related_name='signatures')
 
     entry = property(lambda self: self.get_entry_rel().entry)
 
