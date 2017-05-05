@@ -8,7 +8,20 @@
 
 {% block content %}
 <div class="panel panel-default">
-  <div class="panel-heading"><h2 class="panel-title">Details</h2></div>
+  <div class="panel-heading">
+    <h2 class="panel-title">
+      Details
+
+      <div class="btn-toolbar pull-right">
+        <div class="btn-group">
+          {% if user.id == current_user.id %}
+          <a class="btn btn-link btn-xs" role="button" href="{{ url_for('site.edit_user', user_id=current_user.id) }}">Manage</a>
+          {% endif %}
+        </div>
+      </div>
+
+    </h2>
+  </div>
   <div class="panel-body">
     <dl class="dl-horizontal">
       <dt style="text-align: left">Name</dt><dd>{{user.name}}</dd>

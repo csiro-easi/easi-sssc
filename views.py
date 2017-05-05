@@ -760,7 +760,7 @@ class ToolboxView(EntryView):
 
 
 class UserView(ResourceView):
-    modifiable_fields = ['name', 'public_key']
+    modifiable_fields = ['name', 'email', 'public_key']
 
     def get(self, user_id):
         best = best_mimetype("application/json", "text/html")
@@ -1023,6 +1023,19 @@ register_api(User, UserView, 'user_api', '/users/', pk='user_id')
 register_api(License, LicenseView, 'license_api', '/licenses/', pk='license_id')
 register_api([ProblemSignature, ToolboxSignature, SolutionSignature, Signature],
              SignatureView, 'signature_api', '/signatures/', pk='signature_id')
+
+
+@roles_accepted('admin', 'user')
+@site.route('/edit/users/<int:user_id>')
+def edit_user(user_id):
+    user = User.get(User.id == user_id)
+    if not user:
+        abort(404)
+
+    if user.id != current_user.id and not current_user.has_role('admin'):
+        abort(403)
+
+    return render_template('edit_user_profile.html', user=user)
 
 
 @site.route('/search')

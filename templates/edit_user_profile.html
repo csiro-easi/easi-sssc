@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block page_header %}
+<h2>Edit user profile</h2>
+{% endblock %}
+
+{% block content %}
+<div class="panel panel-default">
+  <div class="panel-heading">
+    <h3 class="panel-title">Details</h3>
+  </div>
+  <div class="panel-body">
+    <div class="form-group">
+      <label for="username">Name</label>
+      <input type="text" class="form-control" id="username" value="{{user.name}}">
+    </div>
+
+    <div class="form-group">
+      <label for="useremail">Email</label>
+      <input type="email" class="form-control" id="useremail" value="{{user.email}}">
+    </div>
+
+    <!-- TODO handle password changes -->
+    <!-- <div class="form-group">
+         <label for="userpassword">Password</label>
+         <input type="password" class="form-control" id="userpassword">
+         </div> -->
+
+    <button type="button" class="btn btn-default">Update</button>
+  </div>
+</div>
+
+<div class="panel panel-default">
+  <div class="panel-heading">
+    <h3 class="panel-title">Public key</h3>
+  </div>
+  <div class="panel-body">
+  <div class="form-group">
+    <input type="file" id="pk_file">
+    <p class="help-block"><pre id="current_pk">{{user.public_key.key}}</pre></p>
+  </div>
+
+  <button type="button" id="upload_pk" class="btn btn-default">Upload</button>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block js_footer %}
+<script type="text/javascript">
+ $('#pk_file').change(function() {
+     var file = this.files[0];
+     if (!file) {
+         return;
+     }
+
+     var reader = new FileReader();
+     reader.onload = function() {
+         $('#current_pk').text(reader.result);
+     };
+     reader.readAsText(file);
+ });
+
+ $('#upload_pk').click(function() {
+     $.ajax({
+         url: '{{ model_url(user) }}',
+         contentType: 'application/merge-patch+json',
+         method: 'PATCH',
+         processData: false,
+         data: JSON.stringify({
+             public_key: $('#current_pk').text()
+         })
+     }).done(function() {
+         alert('Patched!');
+     }).fail(function(jqXHR, textStatus, errorThrown) {
+         alert('Failed! ' + textStatus + ' ' + errorThrown);
+     });
+ });
+</script>
+{% endblock %}
+
