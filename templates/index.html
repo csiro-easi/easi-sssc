@@ -9,7 +9,7 @@
 
 {% block content %}
 <p>
-This catalogue contains descriptions of <a href="{{ url_for('site.problems') }}">problems</a> and offers a library of <a href="{{ url_for('site.solutions') }}">solutions</a> for them. The solutions depend on <a href="{{ url_for('site.toolboxes') }}">scientific codes</a> that are also described in the catalogue. The entries in the catalogue provide the information required to allow a system such as the <a href="http://portal.vhirl.net">VHIRL Portal</a> to automatically find and implement the solutions. 
+This catalogue contains descriptions of <a href="{{ url_for('site.problem_api') }}">problems</a> and offers a library of <a href="{{ url_for('site.solution_api') }}">solutions</a> for them. The solutions depend on <a href="{{ url_for('site.toolbox_api') }}">scientific codes</a> that are also described in the catalogue. The entries in the catalogue provide the information required to allow a system such as the <a href="http://portal.vhirl.net">VHIRL Portal</a> to automatically find and implement the solutions. 
 </p>
 
 {% endblock %}

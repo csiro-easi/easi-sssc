@@ -3,14 +3,18 @@ from flask_admin import Admin, helpers as admin_helpers, expose
 from flask_admin.contrib.peewee import ModelView
 from flask_admin.contrib.peewee.form import CustomModelConverter
 from flask_admin.form import BaseForm
+from flask_admin.model.form import InlineFormAdmin
 from flask_security import current_user
-from wtforms import fields
+from wtforms import fields, TextAreaField, PasswordField
+from wtforms.widgets import TextArea
 from app import app
 from security import security, is_admin, is_user
 from models import Problem, Solution, Toolbox, User, UserRoles, \
     SolutionDependency, ToolboxDependency, \
     SolutionImage, ToolboxImage, \
-    SolutionVar, ToolboxVar, JsonField
+    SolutionVar, ToolboxVar, JsonField, Entry, \
+    ProblemTag, ToolboxTag, SolutionTag, PublicKey
+from views import hash_entry
 
 admin = Admin(app)
 
@@ -77,56 +81,54 @@ class UserAdmin(ProtectedModelView):
         return is_admin()
 
 
+class PublicKeyInlineAdmin(InlineFormAdmin):
+    form_excluded_columns = ['registered_at']
+    form_rules = ['key']
+    form_widget_args = {
+        'key': {
+            'rows': 5,
+            'cols': 100,
+            'style': 'width: auto;'
+        }
+    }
+
+
+class PublicKeyWidget(TextArea):
+    def __init__(self, **kwargs):
+        self.widget_overrides = dict(kwargs)
+        super().__init__()
+
+    def __call__(self, field, **kwargs):
+        for k, v in self.widget_overrides.items():
+            kwargs[k] = v
+        return super().__call__(field, **kwargs)
+
+
 class UserProfile(ProtectedModelView):
     can_create = False
     can_delete = False
     form_excluded_columns = ['id', 'active', 'confirmed_at', 'password']
+    inline_models = [
+        (PublicKey, dict(
+            form_excluded_columns=['registered_at'],
+            form_args={
+                'key': {
+                    'widget': PublicKeyWidget(
+                        rows=5,
+                        cols=100,
+                        style='width: auto'
+                    )
+                }
+            }
+        ))
+    ]
+    # inline_models = [PublicKeyInlineAdmin(PublicKey)]
 
     @expose('/')
     def index_view(self):
         """Users can't list or view others' profiles, so redirect list view."""
         return redirect(self.get_url('.edit_view') +
                         '?id={}'.format(current_user.id))
-
-
-def _clone_model(model):
-    """Create and return a clone of model.
-
-    Save a clone of entry in the database, including all reverse relations
-    (Vars, Deps etc).
-
-    """
-    # Copy current data
-    data = dict(model._data)
-    # clear the primary key
-    data.pop(model._meta.primary_key.name)
-    # Create the new entry
-    # TODO handle unique id/entry combo!
-    copy = type(model).create(**data)
-    # Update references in copied relations to point to the clone
-    for n, f in copy._meta.reverse_rel.items():
-        for x in getattr(copy, n):
-            setattr(x, f.name, copy)
-    copy.save()
-    return copy
-
-
-def _update_entry_history(entry):
-    """Capture the current state of entry before it's updated.
-
-    Then increment the version number for entry.
-
-    """
-    # Find the old state of entry in the db
-    E = type(entry)
-    old_entry = E.get(E.id == entry.id)
-    # Clone the old state into a historical version, and link it back to the
-    # latest entry.
-    clone = _clone_model(old_entry)
-    clone.latest = entry.id
-    clone.save()
-    # Increment the version on the latest entry
-    entry.version = entry.version + 1
 
 
 class EntryModelView(ProtectedModelView):
@@ -139,7 +141,12 @@ class EntryModelView(ProtectedModelView):
     TODO: Decide on whether/how to limit deletion
 
     """
-    form_excluded_columns = ['author', 'latest', 'version']
+    form_excluded_columns = ['author',
+                             'latest',
+                             'version',
+                             'created_at',
+                             'entry_hash']
+    column_editable_list = ['name', 'description']
 
     # If user does not have the 'admin' role, only allow them to administer
     # their own views.
@@ -167,30 +174,46 @@ class EntryModelView(ProtectedModelView):
 
         return it
 
-    def on_model_change(self, form, model, is_created):
+    def on_model_change(self, form, model, is_created=False):
         """Maintain model metadata."""
-        if is_created:
-            model.author = current_user.id
-        else:
-            _update_entry_history(model)
+        # Update model metadata
+        model.update_metadata(is_created)
 
-    def after_model_change(self, form, model, is_created):
-        """Update 'latest' links."""
+    def after_model_change(self, form, model, is_created=False):
+        """Update 'latest' links and entry hashes."""
         model.latest = model.id
+        # Hash updated content and store result with model
+        if isinstance(model, Entry):
+            model.entry_hash = hash_entry(model)
         model.save()
 
 
 class ProblemAdmin(EntryModelView):
-    pass
+    inline_models = (ProblemTag,)
 
 
 class SolutionAdmin(EntryModelView):
+    form_excluded_columns = EntryModelView.form_excluded_columns + \
+                            ['template_hash']
     model_form_converter = VarValuesConverter
-    inline_models = (SolutionDependency, SolutionImage, SolutionVar)
+    inline_models = (
+        SolutionDependency,
+        SolutionImage,
+        SolutionVar,
+        SolutionTag
+    )
 
 
 class ToolboxAdmin(EntryModelView):
-    inline_models = (ToolboxDependency, ToolboxImage, ToolboxVar)
+    form_excluded_columns = EntryModelView.form_excluded_columns + \
+                            ['puppet_hash']
+    model_form_converter = VarValuesConverter
+    inline_models = (
+        ToolboxDependency,
+        ToolboxImage,
+        ToolboxVar,
+        ToolboxTag
+    )
 
 
 admin.add_view(UserAdmin(User))

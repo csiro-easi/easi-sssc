@@ -1,3 +1,6 @@
+from datetime import datetime
+import importlib
+import requests
 from flask import json
 from peewee import BooleanField, CharField, DateTimeField, \
     DoubleField, ForeignKeyField, IntegerField, PrimaryKeyField, \
@@ -5,11 +8,10 @@ from peewee import BooleanField, CharField, DateTimeField, \
 # Use the ext database to get FTS support
 # from peewee import SqliteDatabase
 from playhouse.sqlite_ext import FTSModel, SqliteExtDatabase
-from flask_security import UserMixin, RoleMixin
-import datetime
-import importlib
-from app import app
-
+from flask_security import UserMixin, RoleMixin, current_user
+from rdflib.namespace import RDF
+from app import app, resource_hash
+from namespaces import PROV, SSSC, rdf_graph
 
 # Valid source repositories
 SOURCE_TYPES = (('git', 'GIT repository'),
@@ -57,7 +59,58 @@ def text_search(text):
     return matches
 
 
+def clone_model(model):
+    """Create and return a clone of model.
+
+    Save a clone of entry in the database, including all reverse relations
+    (Vars, Deps etc).
+
+    """
+    # Copy current data
+    data = dict(model._data)
+    # clear the primary key
+    data.pop(model._meta.primary_key.name)
+    # Create the new entry
+    # TODO handle unique id/entry combo!
+    copy = type(model).create(**data)
+    # Update references in copied relations to point to the clone
+    for n, f in copy._meta.reverse_rel.items():
+        for x in getattr(copy, n):
+            setattr(x, f.name, copy)
+    copy.save()
+    return copy
+
+
+def user_entries(user):
+    """Return a list of all entries created by user."""
+    entries = []
+    entries.extend(p for p in user.problems)
+    entries.extend(t for t in user.toolboxes)
+    entries.extend(s for s in user.solutions)
+    return entries
+
+
 class BaseModel(Model):
+    """Base of all application models.
+
+    Sets database connection.
+    Base semantic description functionality.
+
+    """
+    _semantic_types = []
+
+    def semantic_types(self, subject):
+        """Return an RDF graph describing an instnace of this model.
+
+        Subject is a BNode or URIRef.
+
+        """
+        g = rdf_graph()
+        g.add((subject, RDF.type, SSSC[type(self).__name__]))
+        for t in self._semantic_types:
+            g.add((subject, RDF.type, t))
+        return g
+
     class Meta:
         database = db
 
@@ -81,6 +134,16 @@ class User(BaseModel, UserMixin):
     active = BooleanField(default=True)
     confirmed_at = DateTimeField(null=True)
 
+    entries = property(user_entries)
+
+    public_key = property(
+        lambda self: self.public_keys.order_by(
+            PublicKey.registered_at.desc()
+        ).get()
+    )
+
+    _semantic_types = [PROV.Agent, PROV.Person]
+
     def __unicode__(self):
         return self.name
 
@@ -99,6 +162,49 @@ class UserRoles(BaseModel):
         )
 
 
+class PublicKey(BaseModel):
+    """Public keys registered with a User."""
+    user = ForeignKeyField(User, related_name="public_keys")
+    registered_at = DateTimeField(default=datetime.now)
+    key = TextField()
+
+
+class Signature(BaseModel):
+    """Stores signed digests for entries.
+
+    If a digest has been signed, the entry in this table must include the
+    user_id of the user that signed it, and the key they used.
+
+    """
+    signature = CharField()
+    created_at = DateTimeField(default=datetime.now)
+    user_id = ForeignKeyField(User, null=True, related_name='signatures')
+    public_key = CharField(null=True)
+
+    def get_entry_rel(self):
+        """Return the Entry this is a signature for."""
+        if self.problemsignature_set.count() == 1:
+            return self.problemsignature_set[0]
+        if self.toolboxsignature_set.count() == 1:
+            return self.toolboxsignature_set[0]
+        if self.solutionsignature_set.count() == 1:
+            return self.solutionsignature_set[0]
+        return None
+
+    @staticmethod
+    def add_signature(signature, user_id, public_key, entry):
+        """Add a new Signature for entry and return the new instance.
+
+        Ensure integrity by limiting a signature to one entry only.
+
+        """
+        instance = Signature(signature=signature,
+                             user_id=user_id,
+                             public_key=public_key)
+        instance.save()
+
+
+
 class Entry(BaseModel):
     """Base information shared by all entries.
 
@@ -113,18 +219,72 @@ class Entry(BaseModel):
     id = PrimaryKeyField()
     name = CharField()
     description = TextField()
-    created_at = DateTimeField(default=datetime.datetime.now)
+    created_at = DateTimeField(default=datetime.now)
     version = IntegerField(default=1)
-    keywords = TextField(null=True)
-    # author = ForeignKeyField(User)
+    entry_hash = CharField(null=True)
+
+    entry_id = property(lambda self: self.latest.id
+                        if self.latest is not None
+                        else None)
+
+    _semantic_types = [PROV.Entity]
+
+    def _check_resources(self, resources=None):
+        """Check any resources, update any that have changed.
+
+        Returns a list of (field, url) for any resources that have changed
+        since they were last checked.
+
+        """
+        print('checking resources for', str(self))
+        changed = []
+        if resources:
+            for rfield, hfield in resources:
+                url = getattr(self, rfield)
+                old_hash = getattr(self, hfield)
+                r = requests.get(url)
+                new_hash = resource_hash(r.content).hexdigest()
+                if new_hash != old_hash:
+                    changed.append((rfield, url))
+                    setattr(self, hfield, new_hash)
+        return changed
+
+    def update_metadata(self, is_created=False):
+        """Update metadata for this model, including versioning and authorship.
+
+        """
+        # If we have no id, or is_created = True, just set the author.
+        if is_created or self.id is None:
+            self.author = current_user.id
+        else:
+            # Find the old state of entry in the db
+            E = self._meta.model_class
+            old_entry = E.get(E.id == self.id)
+            # Clone the old state into a historical version, and link it back to
+            # the latest entry.
+            clone = clone_model(old_entry)
+            clone.latest = self.id
+            clone.save()
+            # Increment the version on the latest entry, and the timestamp
+            self.version = self.version + 1
+            self.created_at = datetime.now()
+        # Check resources at this point
+        self._check_resources()
 
     def __unicode__(self):
         return "entry ({})".format(self.name)
 
 
+class Tag(BaseModel):
+    tag = CharField()
+
+
 class License(BaseModel):
-    name = CharField(null=True)
+    name = CharField(unique=True)
     url = CharField(null=True)
+    text = TextField(null=True)
+
+    _semantic_types = [PROV.Entity]
 
     def __unicode__(self):
         return self.name if self.name else self.url
@@ -155,8 +315,18 @@ class Problem(Entry):
     Requires nothing extra over Entry.
 
     """
-    author = ForeignKeyField(User)
+    author = ForeignKeyField(User, related_name='problems')
     latest = ForeignKeyField('self', null=True, related_name='versions')
+
+
+class ProblemTag(Tag):
+    entry = ForeignKeyField(Problem, related_name='tags')
+
+
+class ProblemSignature(BaseModel):
+    """Signatures for Problems."""
+    problem = ForeignKeyField(Problem, related_name="signatures")
+    signature = ForeignKeyField(Signature, unique=True, on_delete='CASCADE')
 
 
 class Source(BaseModel):
@@ -191,20 +361,34 @@ class Toolbox(Entry):
     """Environment for running a specific model or software package.
 
     """
-    author = ForeignKeyField(User)
+    author = ForeignKeyField(User, related_name='toolboxes')
     latest = ForeignKeyField('self', null=True, related_name='versions')
     homepage = CharField(null=True)
     license = ForeignKeyField(License, related_name="toolboxes")
     source = ForeignKeyField(Source, null=True, related_name="toolboxes")
-    puppet = CharField(
-        null=True,
-        help_text="URL of a Puppet script that will instantiate this Toolbox."
-    )
     command = CharField(
         null=True,
         help_text=("Command line template for executing a Solution using this"
                    " Toolbox.")
     )
+    puppet = CharField(
+        null=True,
+        help_text="Puppet module that instantiates this Toolbox."
+    )
+    puppet_hash = CharField()
+
+    def _check_resources(self, resources=[('puppet', 'puppet_hash')]):
+        super()._check_resources(resources)
+
+
+class ToolboxTag(Tag):
+    entry = ForeignKeyField(Toolbox, related_name='tags')
+
+
+class ToolboxSignature(BaseModel):
+    """Signatures for Toolboxs."""
+    toolbox = ForeignKeyField(Toolbox, related_name="signatures")
+    signature = ForeignKeyField(Signature, unique=True, on_delete='CASCADE')
 
 
 class ToolboxDependency(Dependency):
@@ -221,11 +405,27 @@ class ToolboxImage(Image):
 
 
 class Solution(Entry):
-    author = ForeignKeyField(User)
+    author = ForeignKeyField(User, related_name='solutions')
     latest = ForeignKeyField('self', null=True, related_name='versions')
     problem = ForeignKeyField(Problem, related_name="solutions")
-    template = CharField()
     runtime = CharField(choices=RUNTIME_CHOICES, default="python")
+    template = CharField(help_text="URL of template that implements this Solution.")
+    template_hash = CharField()
+
+    _semantic_types = [PROV.Entity, PROV.Plan]
+
+    def _check_resources(self, resources=(('template', 'template_hash'),)):
+        super()._check_resources(resources)
+
+
+class SolutionTag(Tag):
+    entry = ForeignKeyField(Solution, related_name='tags')
+
+
+class SolutionSignature(BaseModel):
+    """Signatures for Solutions."""
+    solution = ForeignKeyField(Solution, related_name="signatures")
+    signature = ForeignKeyField(Signature, unique=True, on_delete='CASCADE')
 
 
 class SolutionDependency(Dependency):
@@ -329,10 +529,11 @@ def index_entry(entry):
         obj.save()
 
 
-_TABLES = [User, Role, UserRoles, License, Problem, Toolbox,
-           ToolboxDependency, Solution, SolutionDependency,
+_TABLES = [User, Role, UserRoles, License, Problem, Toolbox, Signature,
+           ToolboxDependency, Solution, SolutionDependency, PublicKey,
            ToolboxVar, SolutionVar, Source, SolutionImage,
-           ToolboxImage]
+           ToolboxImage, ProblemSignature, ToolboxSignature, SolutionSignature,
+           ProblemTag, ToolboxTag, SolutionTag]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 
 

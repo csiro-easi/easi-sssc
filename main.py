@@ -1,7 +1,16 @@
+import click
 from app import app
 import admin
+from bootstrap import bootstrap
 import views
 import argparse
+
+
+@app.cli.command()
+def initdb():
+    """Initialise the database."""
+    click.echo('Initialising the database.')
+    bootstrap()
 
 
 if __name__ == '__main__':
