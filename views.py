@@ -457,7 +457,11 @@ def checked_field(entry, field, hash_field=None):
 
 
 def require_mimetypes(*mimetypes):
-    """Decorator that specifies valid mimetypes for view func."""
+    """Decorator that specifies valid mimetypes for view func.
+
+    Abort with a 415 error if an invalid content-type is requested.
+
+    """
     def wrapper(fn):
         @wraps(fn)
         def decorated_view(*args, **kwargs):
@@ -466,6 +470,29 @@ def require_mimetypes(*mimetypes):
             return fn(*args, **kwargs)
         return decorated_view
     return wrapper
+
+
+def best_mimetype(*mimetypes, default=None, request_obj=None):
+    """Return best content type to return for request.
+
+    If request_obj is None, must be called in the context of a request handler,
+    where a request variable is available.
+
+    """
+    if request_obj is None:
+        request_obj = request
+    # Is there an explicit request?
+    #
+    # This is a temporary fix to allow an explicit 'mimetype' parameter in the
+    # request arguments. This shouldn't be required once explicit api endpoints
+    # are created, and the main URLs can redirect to them using standard content
+    # negotiation.
+    best = request_obj.args.get('mimetype')
+    if not best:
+        # Do the usual content negotiation dance.
+        best = request_obj.accept_mimetypes.best_match(mimetypes,
+                                                       default=default)
+    return best
 
 
 class ResourceView(MethodView):
@@ -487,11 +514,10 @@ class ResourceView(MethodView):
         # Build the RDF prov graph
         g, subject = self.graph(entry)
         # Return the appropriate serialization
-        matchable = ["application/ld+json",
-                     "application/json",
-                     "text/turtle",
-                     "application/rdf+xml"]
-        best = request.accept_mimetypes.best_match(matchable, default=None)
+        best = best_mimetype("application/ld+json",
+                             "application/json",
+                             "text/turtle",
+                             "application/rdf+xml")
         if best is None:
             return NotAcceptable
         serialize_args = dict(format=best)
@@ -590,19 +616,25 @@ class EntryView(ResourceView):
 
     """Handle a single entry."""
     def get(self, entry_id=None):
-        best = request.accept_mimetypes.best_match(["application/json",
-                                                    "text/html"])
+        best = best_mimetype("application/json", "text/html")
         if entry_id is None:
             entries = self.get_list()
             if best == "application/json":
-                key = pluralise(entry_type(self.model))
+                key = pluralise(self.model.__name__)
                 return jsonldify({
                     key: [model_to_dict(entry) for entry in entries]
                 })
             elif best == "text/html":
+                if entries:
+                    entries_url = url_for(model_endpoint(type(entries[0])),
+                                          _external=True,
+                                          mimetype='application/json')
+                else:
+                    entries_url = None
                 return render_template(
                     'entries/list.html',
                     entry_type=pluralise(self.model.__name__),
+                    entries_url=entries_url,
                     entries=entries
                 )
             else:
@@ -724,8 +756,7 @@ class UserView(ResourceView):
     modifiable_fields = ['name', 'public_key']
 
     def get(self, user_id):
-        best = request.accept_mimetypes.best_match(["application/json",
-                                                    "text/html"])
+        best = best_mimetype("application/json", "text/html")
         if user_id is None:
             # Return a list of users
             # TODO: restrict this based on user authorisation?
