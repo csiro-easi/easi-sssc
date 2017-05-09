@@ -1,36 +1,70 @@
+import datetime
 from flask import (Blueprint, request, render_template, url_for,
-                   make_response, abort)
+                   jsonify, make_response, abort)
+from flask.json import JSONEncoder
 from flask.views import MethodView
 from flask_security import current_user
 from flask_security.decorators import auth_required, roles_accepted
 from markdown import markdown
 from functools import wraps
-from app import app, entry_hash
+from app import app
 from models import db, Toolbox, Entry, Problem, Solution, text_search, \
     is_latest, User, \
     License, BaseModel, Role, Dependency, Signature, PublicKey, \
     ProblemSignature, ToolboxSignature, SolutionSignature
 import requests
-from security import is_admin, is_user
+from security import is_admin
 from signatures import verify_signature
 from namespaces import PROV
 from werkzeug.exceptions import NotAcceptable
 from peewee import SelectQuery, DoesNotExist
-from rdflib import BNode, Graph, URIRef
+from rdflib import BNode, URIRef
 from rdflib.namespace import RDF
-from json import dumps, JSONEncoder
-from flask.globals import current_app
-from datetime import datetime
-import re
+
 
 site = Blueprint('site', __name__, template_folder='templates')
 
-class DateTimeEncoder(JSONEncoder):
+
+class SSSCJSONEncoder(JSONEncoder):
+    """Override default flask JSON encoder with SSSC API defaults.
+
+    1. Serialise dates and times as iso8601 strings
+    2. Sort dictionary entries by key
+
+    """
+    # Sort keys by default
+    def __init__(self, skipkeys=False, ensure_ascii=True,
+                 check_circular=True, allow_nan=True, sort_keys=True,
+                 indent=None, separators=None, encoding='utf-8', default=None,
+                 use_decimal=True, namedtuple_as_object=True,
+                 tuple_as_array=True, bigint_as_string=False,
+                 item_sort_key=None, for_json=False, ignore_nan=False,
+                 int_as_string_bitcount=None, iterable_as_array=False):
+        super().__init__(skipkeys=skipkeys, ensure_ascii=ensure_ascii,
+                         check_circular=check_circular, allow_nan=allow_nan,
+                         sort_keys=sort_keys, indent=indent,
+                         separators=separators, encoding=encoding,
+                         default=default, use_decimal=use_decimal,
+                         namedtuple_as_object=namedtuple_as_object,
+                         tuple_as_array=tuple_as_array,
+                         bigint_as_string=bigint_as_string,
+                         item_sort_key=item_sort_key, for_json=for_json,
+                         ignore_nan=ignore_nan,
+                         int_as_string_bitcount=int_as_string_bitcount,
+                         iterable_as_array=iterable_as_array)
+
     def default(self, o):
-        if isinstance(o, datetime):
+        if (isinstance(o, datetime.datetime) or
+            isinstance(o, datetime.date) or
+            isinstance(o, datetime.time)):
             return o.isoformat()
 
         return JSONEncoder.default(self, o)
+
+
+# Configure the app to use our encoder by default
+app.json_encoder = SSSCJSONEncoder
+
 
 # Connect to the database now to catch any errors here
 @app.before_first_request
@@ -59,7 +93,7 @@ def model_pk(model_class):
     return _model_api[model_class][2]
 
 
-def model_url(model, version=None, pinned=False, endpoint=None, rewrite_for_hashing=False, **kwargs):
+def model_url(model, version=None, pinned=False, endpoint=None, **kwargs):
     """Return URL for the model instance.
 
     If model is an Entry, then version and pinned can be used to specify what
@@ -89,20 +123,23 @@ def model_url(model, version=None, pinned=False, endpoint=None, rewrite_for_hash
                 args['version'] = version
             elif pinned or (latest_id is not None and latest_id != model_id):
                 args['version'] = model_version
-        args.update(**kwargs)
+
         # Determine endpoint to use
         if endpoint is None:
             endpoint = model_endpoint(model_class)
-        res= url_for(endpoint,
+
+        # Flask appears to use the url defaults associated with the current
+        # request context, so urls generated while serving a POST request will
+        # use the POSTing style (e.g. /problems/?entry_id=42). Use GET method
+        # defaults for generated URLs unless explicitly overridden in the call
+        # to this function.
+        _method = kwargs.pop('_method', 'GET')
+        args.update(_method=_method, **kwargs)
+
+        # Generate and return the URL
+        return url_for(endpoint,
                        _external=True,
                        **args)
-
-        # Carsten: Need to rewrite some URL endpoints as Flask seems to like doing thins
-        #          non-consistently. Probably depending on whether it is based on a POST
-        #          or GET request
-        if rewrite_for_hashing:
-            res = re.sub('\?[^=]*=','',res)
-        return res
 
 
 def prov_url(entry):
@@ -312,46 +349,6 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
     return data
 
 
-ignored_fields_for_hash = [
-    'id',
-    'entry_hash',
-    'signatures',
-    'latest',
-    'versions',
-    'images'
-]
-
-
-def hash_entry(entry):
-    """Return the hex encoded digest for entry."""
-    if entry is not None:
-        entry_dict = model_to_dict(
-            entry,
-            include_ids=True
-        )
-        return hash_dict(add_context(entry_dict))
-
-
-def hash_dict(entry_dict, log_file=None):
-    for key in ignored_fields_for_hash:
-        try:
-            del entry_dict[key]
-        except KeyError:
-            pass
-    entry_str = dumps(entry_dict, indent=2, separators=(', ', ': '), sort_keys=True, cls=DateTimeEncoder)
-    if log_file is not None:
-        with open(log_file, "w") as text_file:
-            text_file.write(entry_str)
-
-    return hash_str(entry_str)
-
-
-def hash_str(str):
-    hash = entry_hash()
-    hash.update(str.encode('utf-8'))
-    return hash.hexdigest()
-
-
 @app.template_filter('markdown')
 def markdown_filter(md):
     return markdown(md)
@@ -403,76 +400,6 @@ def add_context(response, context=_jsonld_context, embed=True):
     return response
 
 
-def jsonify_sorted(*args, **kwargs):
-    """This function wraps :func:`dumps` to add a few enhancements that make
-    life easier.  It turns the JSON output into a :class:`~flask.Response`
-    object with the :mimetype:`application/json` mimetype.  For convenience, it
-    also converts multiple arguments into an array or multiple keyword arguments
-    into a dict.  This means that both ``jsonify(1,2,3)`` and
-    ``jsonify([1,2,3])`` serialize to ``[1,2,3]``.
-
-    For clarity, the JSON serialization behavior has the following differences
-    from :func:`dumps`:
-
-    1. Single argument: Passed straight through to :func:`dumps`.
-    2. Multiple arguments: Converted to an array before being passed to
-       :func:`dumps`.
-    3. Multiple keyword arguments: Converted to a dict before being passed to
-       :func:`dumps`.
-    4. Both args and kwargs: Behavior undefined and will throw an exception.
-
-    Example usage::
-
-        from flask import jsonify
-
-        @app.route('/_get_current_user')
-        def get_current_user():
-            return jsonify(username=g.user.username,
-                           email=g.user.email,
-                           id=g.user.id)
-
-    This will send a JSON response like this to the browser::
-
-        {
-            "username": "admin",
-            "email": "admin@localhost",
-            "id": 42
-        }
-
-
-    .. versionchanged:: 0.11
-       Added support for serializing top-level arrays. This introduces a
-       security risk in ancient browsers. See :ref:`json-security` for details.
-
-    This function's response will be pretty printed if it was not requested
-    with ``X-Requested-With: XMLHttpRequest`` to simplify debugging unless
-    the ``JSONIFY_PRETTYPRINT_REGULAR`` config parameter is set to false.
-    Compressed (not pretty) formatting currently means no indents and no
-    spaces after separators.
-
-    .. versionadded:: 0.2
-    """
-
-    indent = None
-    separators = (',', ':')
-
-    if current_app.config['JSONIFY_PRETTYPRINT_REGULAR'] and not request.is_xhr:
-        indent = 2
-        separators = (', ', ': ')
-
-    if args and kwargs:
-        raise TypeError('jsonify() behavior undefined when passed both args and kwargs')
-    elif len(args) == 1:  # single args are passed directly to dumps()
-        data = args[0]
-    else:
-        data = args or kwargs
-
-    return current_app.response_class(
-        (dumps(data, indent=indent, separators=separators, sort_keys=True, cls=DateTimeEncoder), '\n'),
-        mimetype=current_app.config['JSONIFY_MIMETYPE']
-    )
-
-
 def jsonldify(x, context=_jsonld_context, embed=True):
     """Return a JSON-LD response from x, including the default context.
 
@@ -480,7 +407,7 @@ def jsonldify(x, context=_jsonld_context, embed=True):
     default context document.
 
     """
-    resp = jsonify_sorted(add_context(x, context, embed))
+    resp = jsonify(add_context(x, context, embed))
     resp.mimetype = 'application/ld+json'
     return resp
 
@@ -741,10 +668,13 @@ class EntryView(ResourceView):
             if request.url.endswith('/prov'):
                 return self.prov_view(entry)
             elif best == "application/json":
-                return jsonldify(model_to_dict(
-                    entry,
-                    include_ids=True
-                ))
+                # Do *not* include internal ids, except if requested using the
+                # undocumented API.
+                if request.args.get('_include_ids'):
+                    entry_dict = model_to_dict(entry, include_ids=True)
+                else:
+                    entry_dict = model_to_dict(entry)
+                return jsonldify(entry_dict)
             elif best == "text/html":
                 return render_template(self.detail_template,
                                        **self.detail_template_args(entry))
@@ -1031,7 +961,7 @@ class SignatureView(ResourceView):
         if entry_hash is None or signature is None or uri is None:
             abort(400)
         # Find the Entry to link it to
-        entry_dict = requests.get(uri + '?_include_id=True').json()
+        entry_dict = requests.get(uri, params=dict(_include_ids=True)).json()
         if not entry_dict:
             abort(404)
         # Make sure their hash is the same as our hash for the requested entry.

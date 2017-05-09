@@ -1,4 +1,5 @@
 from datetime import datetime
+import hashlib
 import importlib
 import requests
 from flask import json
@@ -10,7 +11,7 @@ from peewee import BooleanField, CharField, DateTimeField, \
 from playhouse.sqlite_ext import FTSModel, SqliteExtDatabase
 from flask_security import UserMixin, RoleMixin, current_user
 from rdflib.namespace import RDF
-from app import app, resource_hash
+from app import app
 from namespaces import PROV, SSSC, rdf_graph
 
 # Valid source repositories
@@ -42,6 +43,9 @@ db = SqliteExtDatabase(app.config['SQLITE_DB_FILE'],
 RUNTIME_CHOICES = (('python2', 'Latest Python 2.x'),
                    ('python3', 'Latest Python 3.x'),
                    ('python', 'Latest Python 2 or 3'))
+
+
+resource_hash = getattr(hashlib, app.config['RESOURCE_HASH_FUNCTION'])
 
 
 def text_search(text):
