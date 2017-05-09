@@ -137,7 +137,7 @@ class User(BaseModel, UserMixin):
     entries = property(user_entries)
 
     public_key = property(
-        lambda self: self._get_public_key
+        lambda self: self._get_public_key()
     )
 
     _semantic_types = [PROV.Agent, PROV.Person]

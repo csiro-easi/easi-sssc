@@ -1,8 +1,8 @@
-from flask import (Blueprint, request, render_template, url_for, jsonify,
+from flask import (Blueprint, request, render_template, url_for,
                    make_response, abort)
 from flask.views import MethodView
 from flask_security import current_user
-from flask_security.decorators import http_auth_required, roles_accepted
+from flask_security.decorators import auth_required, roles_accepted
 from markdown import markdown
 from functools import wraps
 from app import app, entry_hash
@@ -17,9 +17,19 @@ from werkzeug.exceptions import NotAcceptable
 from peewee import SelectQuery, DoesNotExist
 from rdflib import BNode, Graph, URIRef
 from rdflib.namespace import RDF
+from json import dumps, JSONEncoder
+from flask.globals import current_app
+from datetime import datetime
+import re
 
 site = Blueprint('site', __name__, template_folder='templates')
 
+class DateTimeEncoder(JSONEncoder):
+    def default(self, o):
+        if isinstance(o, datetime):
+            return o.isoformat()
+
+        return JSONEncoder.default(self, o)
 
 # Connect to the database now to catch any errors here
 @app.before_first_request
@@ -48,7 +58,7 @@ def model_pk(model_class):
     return _model_api[model_class][2]
 
 
-def model_url(model, version=None, pinned=False, endpoint=None, **kwargs):
+def model_url(model, version=None, pinned=False, endpoint=None, rewrite_for_hashing=False, **kwargs):
     """Return URL for the model instance.
 
     If model is an Entry, then version and pinned can be used to specify what
@@ -82,15 +92,22 @@ def model_url(model, version=None, pinned=False, endpoint=None, **kwargs):
         # Determine endpoint to use
         if endpoint is None:
             endpoint = model_endpoint(model_class)
-        return url_for(endpoint,
+        res= url_for(endpoint,
                        _external=True,
                        **args)
+
+        # Carsten: Need to rewrite some URL endpoints as Flask seems to like doing thins
+        #          non-consistently. Probably depending on whether it is based on a POST
+        #          or GET request
+        if rewrite_for_hashing:
+            res = re.sub('\?[^=]*=','',res)
+        return res
 
 
 def prov_url(entry):
     """Return the prov URL for entry."""
     endpoint = model_endpoint(type(entry)) + '_prov'
-    return model_url(entry, endpoint=endpoint)
+    return model_url(entry, endpoint=endpoint, rewrite_for_hashing=True)
 
 
 def edit_url(entry, url=None):
@@ -186,7 +203,7 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
     data = {}
 
     # Always include semantic markup, plus an @id attribute if we have one
-    uri = model_url(model)
+    uri = model_url(model, rewrite_for_hashing=True)
     if uri:
         data['@id'] = uri
         prov = prov_url(model)
@@ -200,6 +217,7 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
         data['@type'] = [t.n3(g.namespace_manager)
                          for t in g.objects(subject=subject,
                                             predicate=RDF.type)]
+        data['@type'].sort() # Carsten: Needs to be sorted to guarantee deterministic JSON for hashing
 
     # Iterate over fields of model
     foreign = set(model._meta.rel.values())
@@ -228,7 +246,7 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
                     )
                 else:
                     # Replace with external reference
-                    f_data = model_url(rel_obj)
+                    f_data = model_url(rel_obj, rewrite_for_hashing=True)
 
         if include_nulls or f_data is not None:
             data[f.name] = f_data
@@ -250,7 +268,7 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
         accum = []
         for rel_obj in related_query:
             if descriptor in refs:
-                accum.append(model_url(rel_obj))
+                accum.append(model_url(rel_obj, rewrite_for_hashing=True))
             else:
                 accum.append(model_to_dict(
                     rel_obj,
@@ -272,7 +290,7 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
                 if isinstance(value, BaseModel):
                     # Should this be a reference?
                     if prop in refs:
-                        value = model_url(value)
+                        value = model_url(value, rewrite_for_hashing=True)
                     else:
                         # If it's got any references to model, exclude them
                         ref = value._meta.rel_for_model(model_class)
@@ -303,45 +321,34 @@ ignored_fields_for_hash = [
 ]
 
 
-def _sort_for_hash(x):
-    if isinstance(x, dict):
-        return x.get('id', x)
-    return x
-
-
-def hashable_data(obj):
-    """Return a list of the hashable strings from obj.
-
-    Transforms obj into the canonical form required for hashing, extracts the
-    strings corresponding to the hashable data, and returns the resulting list.
-
-    """
-    data = []
-    if isinstance(obj, dict):
-        for k, v in sorted(obj.items()):
-            if v is None or k in ignored_fields_for_hash:
-                # Check for fields to ignore and null values
-                continue
-
-            data.extend(hashable_data(v))
-    elif isinstance(obj, list) or isinstance(obj, tuple):
-        # Sort by id if available, then recurse into each
-        for x in sorted(obj, key=_sort_for_hash):
-            data.extend(hashable_data(x))
-    else:
-        # Include the string value.
-        data.append(str(obj))
-    return data
-
-
 def hash_entry(entry):
     """Return the hex encoded digest for entry."""
     if entry is not None:
-        data = hashable_data(model_to_dict(entry, include_ids=True))
-        hash = entry_hash()
-        for d in data:
-            hash.update(d.encode())
-        return hash.hexdigest()
+        entry_dict = model_to_dict(
+            entry,
+            include_ids=True
+        )
+        return hash_dict(add_context(entry_dict))
+
+
+def hash_dict(entry_dict, log_file=None):
+    for key in ignored_fields_for_hash:
+        try:
+            del entry_dict[key]
+        except KeyError:
+            pass
+    entry_str = dumps(entry_dict, indent=2, separators=(', ', ': '), sort_keys=True, cls=DateTimeEncoder)
+    if log_file is not None:
+        with open(log_file, "w") as text_file:
+            text_file.write(entry_str)
+
+    return hash_str(entry_str)
+
+
+def hash_str(str):
+    hash = entry_hash()
+    hash.update(str.encode('utf-8'))
+    return hash.hexdigest()
 
 
 @app.template_filter('markdown')
@@ -374,7 +381,7 @@ def add_context(response, context=_jsonld_context, embed=True):
         if '@context' in response:
             context = response['@context']
             if embed and isinstance(context, dict):
-                for k, v in _jsonld_context:
+                for k, v in _jsonld_context.items():
                     if k not in context:
                         context[k] = v
             # else assume @context is aleady a URL, and do not override it.
@@ -388,6 +395,76 @@ def add_context(response, context=_jsonld_context, embed=True):
     return response
 
 
+def jsonify_sorted(*args, **kwargs):
+    """This function wraps :func:`dumps` to add a few enhancements that make
+    life easier.  It turns the JSON output into a :class:`~flask.Response`
+    object with the :mimetype:`application/json` mimetype.  For convenience, it
+    also converts multiple arguments into an array or multiple keyword arguments
+    into a dict.  This means that both ``jsonify(1,2,3)`` and
+    ``jsonify([1,2,3])`` serialize to ``[1,2,3]``.
+
+    For clarity, the JSON serialization behavior has the following differences
+    from :func:`dumps`:
+
+    1. Single argument: Passed straight through to :func:`dumps`.
+    2. Multiple arguments: Converted to an array before being passed to
+       :func:`dumps`.
+    3. Multiple keyword arguments: Converted to a dict before being passed to
+       :func:`dumps`.
+    4. Both args and kwargs: Behavior undefined and will throw an exception.
+
+    Example usage::
+
+        from flask import jsonify
+
+        @app.route('/_get_current_user')
+        def get_current_user():
+            return jsonify(username=g.user.username,
+                           email=g.user.email,
+                           id=g.user.id)
+
+    This will send a JSON response like this to the browser::
+
+        {
+            "username": "admin",
+            "email": "admin@localhost",
+            "id": 42
+        }
+
+
+    .. versionchanged:: 0.11
+       Added support for serializing top-level arrays. This introduces a
+       security risk in ancient browsers. See :ref:`json-security` for details.
+
+    This function's response will be pretty printed if it was not requested
+    with ``X-Requested-With: XMLHttpRequest`` to simplify debugging unless
+    the ``JSONIFY_PRETTYPRINT_REGULAR`` config parameter is set to false.
+    Compressed (not pretty) formatting currently means no indents and no
+    spaces after separators.
+
+    .. versionadded:: 0.2
+    """
+
+    indent = None
+    separators = (',', ':')
+
+    if current_app.config['JSONIFY_PRETTYPRINT_REGULAR'] and not request.is_xhr:
+        indent = 2
+        separators = (', ', ': ')
+
+    if args and kwargs:
+        raise TypeError('jsonify() behavior undefined when passed both args and kwargs')
+    elif len(args) == 1:  # single args are passed directly to dumps()
+        data = args[0]
+    else:
+        data = args or kwargs
+
+    return current_app.response_class(
+        (dumps(data, indent=indent, separators=separators, sort_keys=True, cls=DateTimeEncoder), '\n'),
+        mimetype=current_app.config['JSONIFY_MIMETYPE']
+    )
+
+
 def jsonldify(x, context=_jsonld_context, embed=True):
     """Return a JSON-LD response from x, including the default context.
 
@@ -395,7 +472,7 @@ def jsonldify(x, context=_jsonld_context, embed=True):
     default context document.
 
     """
-    resp = jsonify(add_context(x, context, embed))
+    resp = jsonify_sorted(add_context(x, context, embed))
     resp.mimetype = 'application/ld+json'
     return resp
 
@@ -658,7 +735,7 @@ class EntryView(ResourceView):
             elif best == "application/json":
                 return jsonldify(model_to_dict(
                     entry,
-                    include_ids=request.args.get('_include_id', False)
+                    include_ids=True
                 ))
             elif best == "text/html":
                 return render_template(self.detail_template,
@@ -810,7 +887,7 @@ class UserView(ResourceView):
         """Register a new user."""
         pass
 
-    @http_auth_required
+    @auth_required('token', 'session', 'basic')
     @require_mimetypes('application/json',
                        'application/merge-patch+json')
     def patch(self, user_id):
@@ -837,7 +914,7 @@ class UserView(ResourceView):
         self.update_resource(user, data)
         return self.get(user_id=user_id)
 
-    @http_auth_required
+    @auth_required('token', 'session', 'basic')
     @roles_accepted('admin', 'user')
     @require_mimetypes('application/json', 'text/plain')
     def put(self, user_id, prop=None):
@@ -937,7 +1014,7 @@ class SignatureView(ResourceView):
                                                extra=['entry'],
                                                refs=['entry']))
 
-    @http_auth_required
+    @auth_required('token', 'session', 'basic')
     def post(self):
         data = request.get_json()
         entry_hash = data.get('entry_hash')
@@ -976,7 +1053,8 @@ class SignatureView(ResourceView):
 
         return "Failed to verify signature with public key.", 400
 
-    @http_auth_required
+    @auth_required('token', 'session', 'basic')
+    @roles_accepted('admin')
     def delete(self, signature_id):
         """Delete the signature."""
         if signature_id is not None:
