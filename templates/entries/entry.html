@@ -7,10 +7,12 @@
       <!-- </h3> -->
       <div class="btn-toolbar pull-right">
         <div class="btn-group">
+          {% if entry.author.id == current_user.id %}
           {% if entry.id == entry.latest.id %}
           <a class="btn btn-link btn-xs" role="button" href="{{ edit_url(entry, url=request.full_path) }}">Edit</a>
           {% else %}
           <a class="btn btn-link btn-xs disabled" role="button" href="#">Edit</a>
+          {% endif %}
           {% endif %}
         </div>
 

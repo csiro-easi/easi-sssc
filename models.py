@@ -137,12 +137,18 @@ class User(BaseModel, UserMixin):
     entries = property(user_entries)
 
     public_key = property(
-        lambda self: self.public_keys.order_by(
-            PublicKey.registered_at.desc()
-        ).get()
+        lambda self: self._get_public_key
     )
 
     _semantic_types = [PROV.Agent, PROV.Person]
+
+    def _get_public_key(self):
+        try:
+            return self.public_keys.order_by(
+                PublicKey.registered_at.desc()
+            ).get()
+        except Exception:
+            return None
 
     def __unicode__(self):
         return self.name
@@ -179,7 +185,7 @@ class Signature(BaseModel):
     signature = CharField()
     created_at = DateTimeField(default=datetime.now)
     user_id = ForeignKeyField(User, null=True, related_name='signatures')
-    public_key = CharField(null=True)
+    public_key = ForeignKeyField(PublicKey, related_name='signatures')
 
     entry = property(lambda self: self.get_entry_rel().entry)
 

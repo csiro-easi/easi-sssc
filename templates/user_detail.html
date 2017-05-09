@@ -2,18 +2,68 @@
 
 {% block page_header %}
 <div class="page-header">
-  <h1>{{ user.name }}</h1>
+  <h1>User Profile</h1>
 </div>
 {% endblock %}
 
 {% block content %}
 <div class="panel panel-default">
-  <div class="panel-heading"><h2 class="panel-title">Entries</h2></div>
+  <div class="panel-heading">
+    <h2 class="panel-title">
+      Details
+
+      <div class="btn-toolbar pull-right">
+        <div class="btn-group">
+          {% if user.id == current_user.id %}
+          <a class="btn btn-link btn-xs" role="button" href="{{ url_for('site.edit_user', user_id=current_user.id) }}">Manage</a>
+          {% endif %}
+        </div>
+      </div>
+
+    </h2>
+  </div>
   <div class="panel-body">
-    {% with %}
-    {% set include_type = True %}
-    {% include 'entries/results.html' %}
-    {% endwith %}
+    <dl class="dl-horizontal">
+      <dt style="text-align: left">Name</dt><dd>{{user.name}}</dd>
+      <dt style="text-align: left">Public key</dt><dd><pre>{{user.public_key.key}}</pre></dd>
+    </dl>
   </div>
 </div>
+
+<div class="panel panel-default">
+  <div class="panel-heading"><h2 class="panel-title">Contributions</h2></div>
+  <table class="table table-hover">
+    <tr>
+      <th>Type</th>
+      <th>Name</th>
+      <th>Last modified</th>
+      <th>URL</th>
+    </tr>
+
+    {% for entry in entries %}
+    {% with url = model_url(entry) %}
+    <tr>
+      <td>{{ entry_type(entry) }}</td>
+      <td>{{ entry.name }}</td>
+      <td>{{ entry.created_at }}</td>
+      <td><a href="{{ url }}">{{ url }}</a></td>
+    </tr>
+    {% endwith %}
+    {% endfor %}
+  </table>
+</div>
+
+<div class="panel panel-default">
+  <div class="panel-heading"><h2 class="panel-title">Signatures</h2></div>
+  <div class="panel-body">
+    <ul class="list-unstyled">
+      {% for signature in user.signatures %}
+      {% with url = model_url(signature) %}
+      <li><a href="{{url}}">{{url}}</a></li>
+      {% endwith %}
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
 {% endblock %}

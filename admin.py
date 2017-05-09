@@ -2,7 +2,7 @@ from flask import abort, redirect, request, url_for
 from flask_admin import Admin, helpers as admin_helpers, expose
 from flask_admin.contrib.peewee import ModelView
 from flask_admin.contrib.peewee.form import CustomModelConverter
-from flask_admin.form import BaseForm
+from flask_admin.form import BaseForm, rules
 from flask_admin.model.form import InlineFormAdmin
 from flask_security import current_user
 from wtforms import fields, TextAreaField, PasswordField
@@ -16,7 +16,7 @@ from models import Problem, Solution, Toolbox, User, UserRoles, \
     ProblemTag, ToolboxTag, SolutionTag, PublicKey
 from views import hash_entry
 
-admin = Admin(app)
+admin = Admin(app, template_mode='bootstrap3')
 
 
 class VarValuesConverter(CustomModelConverter):
@@ -107,21 +107,25 @@ class PublicKeyWidget(TextArea):
 class UserProfile(ProtectedModelView):
     can_create = False
     can_delete = False
-    form_excluded_columns = ['id', 'active', 'confirmed_at', 'password']
-    inline_models = [
-        (PublicKey, dict(
-            form_excluded_columns=['registered_at'],
-            form_args={
-                'key': {
-                    'widget': PublicKeyWidget(
-                        rows=5,
-                        cols=100,
-                        style='width: auto'
-                    )
-                }
-            }
-        ))
-    ]
+    edit_template = 'admin/user_edit.html'
+
+    form_rules = (
+        rules.FieldSet(('name', 'email'), 'Details'),
+    )
+    # inline_models = [
+    #     (PublicKey, dict(
+    #         form_excluded_columns=['registered_at'],
+    #         form_args={
+    #             'key': {
+    #                 'widget': PublicKeyWidget(
+    #                     rows=5,
+    #                     cols=100,
+    #                     style='width: auto'
+    #                 )
+    #             }
+    #         }
+    #     ))
+    # ]
     # inline_models = [PublicKeyInlineAdmin(PublicKey)]
 
     @expose('/')
@@ -147,6 +151,7 @@ class EntryModelView(ProtectedModelView):
                              'created_at',
                              'entry_hash']
     column_editable_list = ['name', 'description']
+    can_view_details = True
 
     # If user does not have the 'admin' role, only allow them to administer
     # their own views.
@@ -217,7 +222,7 @@ class ToolboxAdmin(EntryModelView):
 
 
 admin.add_view(UserAdmin(User))
-admin.add_view(UserProfile(User, endpoint='profile'))
+# admin.add_view(UserProfile(User, endpoint='profile'))
 admin.add_view(ProblemAdmin(Problem))
 admin.add_view(SolutionAdmin(Solution))
 admin.add_view(ToolboxAdmin(Toolbox))
