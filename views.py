@@ -2,7 +2,7 @@ from flask import (Blueprint, request, render_template, url_for,
                    make_response, abort)
 from flask.views import MethodView
 from flask_security import current_user
-from flask_security.decorators import http_auth_required, roles_accepted
+from flask_security.decorators import auth_required, roles_accepted
 from markdown import markdown
 from functools import wraps
 from app import app, entry_hash
@@ -887,7 +887,7 @@ class UserView(ResourceView):
         """Register a new user."""
         pass
 
-    @http_auth_required
+    @auth_required('token', 'session', 'basic')
     @require_mimetypes('application/json',
                        'application/merge-patch+json')
     def patch(self, user_id):
@@ -914,7 +914,7 @@ class UserView(ResourceView):
         self.update_resource(user, data)
         return self.get(user_id=user_id)
 
-    @http_auth_required
+    @auth_required('token', 'session', 'basic')
     @roles_accepted('admin', 'user')
     @require_mimetypes('application/json', 'text/plain')
     def put(self, user_id, prop=None):
@@ -1014,7 +1014,7 @@ class SignatureView(ResourceView):
                                                extra=['entry'],
                                                refs=['entry']))
 
-    @http_auth_required
+    @auth_required('token', 'session', 'basic')
     def post(self):
         data = request.get_json()
         entry_hash = data.get('entry_hash')
@@ -1053,7 +1053,8 @@ class SignatureView(ResourceView):
 
         return "Failed to verify signature with public key.", 400
 
-    @http_auth_required
+    @auth_required('token', 'session', 'basic')
+    @roles_accepted('admin')
     def delete(self, signature_id):
         """Delete the signature."""
         if signature_id is not None:
