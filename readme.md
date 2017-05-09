@@ -12,18 +12,22 @@ they are executed in the working directory.
 pip install -r requirements.txt
 ```
 
-You can run the development server by simply calling python to execute the
-main.py module. The first time you run it you need to pass the -b flag to tell
-it to bootstrap the database.
+You can run the development server using the flask command line client. First set up the environment to tell flask which application to run, and that we want to use the debug mode that enables code reloading.
 
 ```
-python main.py -b
+export FLASK_APP=main FLASK_DEBUG=1
 ```
 
-On subsequent runs you do not want the -b flag unless you want to reset your database.
+Next you need to initialise the database.
 
 ```
-python main.py
+flask initdb
+```
+
+Then you can run the following command each time you needd to start the threaded development server.
+
+```
+flask run --with-threads
 ```
 
 # Using Docker
