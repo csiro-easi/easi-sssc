@@ -7,7 +7,7 @@
   <div class="panel-heading"><h2 class="panel-title">Solutions</h2></div>
   <div class="panel-body">
     {% with %}
-    {% set entries = entry.solutions %}
+    {% set entries = entry.solutions|latest_only %}
     {% include 'entries/results.html' %}
     {% endwith %}
   </div>

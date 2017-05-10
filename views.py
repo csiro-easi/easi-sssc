@@ -6,7 +6,8 @@ from flask_security.decorators import auth_required, roles_accepted
 from markdown import markdown
 from functools import wraps
 from app import app, entry_hash
-from models import db, Toolbox, Entry, Problem, Solution, text_search, User, \
+from models import db, Toolbox, Entry, Problem, Solution, text_search, \
+    is_latest, User, \
     License, BaseModel, Role, Dependency, Signature, PublicKey, \
     ProblemSignature, ToolboxSignature, SolutionSignature
 import requests
@@ -354,6 +355,13 @@ def hash_str(str):
 @app.template_filter('markdown')
 def markdown_filter(md):
     return markdown(md)
+
+
+@app.template_filter('latest_only')
+def latest_only(entries):
+    """Return a new list consisting of only the latest versions of entries."""
+    if entries:
+        return filter(is_latest, entries)
 
 
 def entry_type(entry):

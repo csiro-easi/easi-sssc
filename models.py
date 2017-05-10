@@ -90,6 +90,11 @@ def user_entries(user):
     return entries
 
 
+def is_latest(entry):
+    """Return True if entry is the latest version."""
+    return entry.latest is None or entry.latest.id == entry.id
+
+
 class BaseModel(Model):
     """Base of all application models.
 
