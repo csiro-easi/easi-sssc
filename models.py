@@ -218,7 +218,8 @@ class Entry(BaseModel):
     created_at -- Datetime this Entry was added to the catalogue
     author -- Who created this Entry
     version -- Version number for this Entry
-    keywords -- Space separated list of keywords describing this Entry
+    entry_hash -- Auto-generated hash of entry content
+    published -- Flag indicating visibility status
 
     """
     id = PrimaryKeyField()
@@ -227,6 +228,7 @@ class Entry(BaseModel):
     created_at = DateTimeField(default=datetime.now)
     version = IntegerField(default=1)
     entry_hash = CharField(null=True)
+    published = BooleanField(default=app.config['PUBLISH_DEFAULT'])
 
     entry_id = property(lambda self: self.latest.id
                         if self.latest is not None
@@ -360,6 +362,7 @@ class Image(BaseModel):
     image_id -- Identifier for this image
     """
     provider = CharField()
+    
     image_id = CharField()
 
 

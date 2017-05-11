@@ -15,9 +15,19 @@ class ScmRegisterForm(RegisterForm):
 user_datastore = PeeweeUserDatastore(db, User, Role, UserRoles)
 security = Security(app, user_datastore, confirm_register_form=ScmRegisterForm)
 
+_default_roles = []
+
+
+def _define_role(name, description):
+    _default_roles.append(dict(name=name, description=description))
+    return name
+
+
 # Create the database and roles
-admin_role = 'admin'
-user_role = 'user'
+admin_role = _define_role('admin', 'Administrators')
+user_role = _define_role('user', 'Regular users')
+moderator_role = _define_role('moderator',
+                              'Can approve submissions for publication')
 
 
 @user_confirmed.connect_via(app)
@@ -28,8 +38,8 @@ def on_user_confirmed(sender, user):
 
 def initialise_db():
     create_database(db)
-    Role.get_or_create(name='admin', description='Administrator')
-    Role.get_or_create(name='user', description='User')
+    for role in _default_roles:
+        Role.get_or_create(name=role['name'], description=role['description'])
 
 
 def is_admin(user=None):

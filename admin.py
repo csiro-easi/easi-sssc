@@ -83,60 +83,6 @@ class UserAdmin(ProtectedModelView):
         return is_admin()
 
 
-class PublicKeyInlineAdmin(InlineFormAdmin):
-    form_excluded_columns = ['registered_at']
-    form_rules = ['key']
-    form_widget_args = {
-        'key': {
-            'rows': 5,
-            'cols': 100,
-            'style': 'width: auto;'
-        }
-    }
-
-
-class PublicKeyWidget(TextArea):
-    def __init__(self, **kwargs):
-        self.widget_overrides = dict(kwargs)
-        super().__init__()
-
-    def __call__(self, field, **kwargs):
-        for k, v in self.widget_overrides.items():
-            kwargs[k] = v
-        return super().__call__(field, **kwargs)
-
-
-class UserProfile(ProtectedModelView):
-    can_create = False
-    can_delete = False
-    edit_template = 'admin/user_edit.html'
-
-    form_rules = (
-        rules.FieldSet(('name', 'email'), 'Details'),
-    )
-    # inline_models = [
-    #     (PublicKey, dict(
-    #         form_excluded_columns=['registered_at'],
-    #         form_args={
-    #             'key': {
-    #                 'widget': PublicKeyWidget(
-    #                     rows=5,
-    #                     cols=100,
-    #                     style='width: auto'
-    #                 )
-    #             }
-    #         }
-    #     ))
-    # ]
-    # inline_models = [PublicKeyInlineAdmin(PublicKey)]
-
-    @expose('/')
-    def index_view(self):
-        """Users can't list or view others' profiles, so redirect list view."""
-        return redirect(self.get_url('.edit_view') +
-                        '?id={}'.format(current_user.id))
-
-
 class EntryModelView(ProtectedModelView):
     """View for administering all Entries.
 
@@ -147,13 +93,17 @@ class EntryModelView(ProtectedModelView):
     TODO: Decide on whether/how to limit deletion
 
     """
+    can_view_details = True
+    column_editable_list = ['name', 'description']
+    column_list = ['name', 'description', 'author', 'version', 'created_at']
+    create_modal = True
+    details_modal = False
+    edit_modal = True
     form_excluded_columns = ['author',
                              'latest',
                              'version',
                              'created_at',
                              'entry_hash']
-    column_editable_list = ['name', 'description']
-    can_view_details = True
 
     # If user does not have the 'admin' role, only allow them to administer
     # their own views.
