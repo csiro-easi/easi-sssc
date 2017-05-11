@@ -145,7 +145,7 @@ def model_url(model, version=None, pinned=False, endpoint=None, **kwargs):
 def prov_url(entry):
     """Return the prov URL for entry."""
     endpoint = model_endpoint(type(entry)) + '_prov'
-    return model_url(entry, endpoint=endpoint, rewrite_for_hashing=True)
+    return model_url(entry, endpoint=endpoint)
 
 
 def edit_url(entry, url=None):
@@ -241,7 +241,7 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
     data = {}
 
     # Always include semantic markup, plus an @id attribute if we have one
-    uri = model_url(model, rewrite_for_hashing=True)
+    uri = model_url(model)
     if uri:
         data['@id'] = uri
         prov = prov_url(model)
@@ -252,10 +252,10 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
         subject = BNode()
     if isinstance(model, BaseModel):
         g = model.semantic_types(subject)
-        data['@type'] = [t.n3(g.namespace_manager)
-                         for t in g.objects(subject=subject,
-                                            predicate=RDF.type)]
-        data['@type'].sort() # Carsten: Needs to be sorted to guarantee deterministic JSON for hashing
+        # Carsten: Needs to be sorted to guarantee deterministic JSON for hashing
+        data['@type'] = sorted(t.n3(g.namespace_manager)
+                               for t in g.objects(subject=subject,
+                                                  predicate=RDF.type))
 
     # Iterate over fields of model
     foreign = set(model._meta.rel.values())
@@ -284,7 +284,7 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
                     )
                 else:
                     # Replace with external reference
-                    f_data = model_url(rel_obj, rewrite_for_hashing=True)
+                    f_data = model_url(rel_obj)
 
         if include_nulls or f_data is not None:
             data[f.name] = f_data
@@ -306,7 +306,7 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
         accum = []
         for rel_obj in related_query:
             if descriptor in refs:
-                accum.append(model_url(rel_obj, rewrite_for_hashing=True))
+                accum.append(model_url(rel_obj))
             else:
                 accum.append(model_to_dict(
                     rel_obj,
@@ -328,7 +328,7 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
                 if isinstance(value, BaseModel):
                     # Should this be a reference?
                     if prop in refs:
-                        value = model_url(value, rewrite_for_hashing=True)
+                        value = model_url(value)
                     else:
                         # If it's got any references to model, exclude them
                         ref = value._meta.rel_for_model(model_class)
