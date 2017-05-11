@@ -1,14 +1,15 @@
 import argparse
-import json
-from views import hash_dict
+import binascii
+from datetime import datetime
 from rsa import PrivateKey
 import rsa
-from datetime import datetime
+
+from signatures import canonical_form, hash_canonical_entry
 
 #
 # Key Pair creation:
 # Private key: openssl genrsa -out rsakey.pem 2048
-# Public  key: openssl rsa -in rsakey.pem -pubout > rsakey.pub.pem
+# Public  key: openssl rsa -in rsakey.pem -RSAPublicKey_out > rsakey.pub.pem
 #
 
 if __name__ == '__main__':
@@ -28,24 +29,27 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    entry_hash=None
-
     with open(args.filename, "r") as entry_file:
         entry_str = entry_file.read()
-        entry_dict = json.loads(entry_str)
-        entry_hash = hash_dict(entry_dict, log_file="C:\\opt\\sign_entry.json")
+        canonical_entry = canonical_form(entry_str)
+        with open("C:\\opt\\sign_entry.json", 'w') as log_file:
+            log_file.write(canonical_entry)
+        entry_hash = hash_canonical_entry(canonical_entry)
         print(entry_hash)
 
     private_key = None
 
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
-    signable_str = entry_hash+"$"+now
+    # signable_str = entry_hash+"$"+now
+    signable_str = entry_hash
 
     with open(args.key, "r") as key_file:
         key_str = key_file.read()
         private_key = PrivateKey.load_pkcs1(key_str)
 
     signature  = rsa.sign(signable_str.encode("UTF-8"), private_key, "SHA-256")
+
+    print(binascii.hexlify(signature))
 
     print("end")

@@ -5,7 +5,8 @@ from flask_admin.contrib.peewee.form import CustomModelConverter
 from flask_admin.form import BaseForm, rules
 from flask_admin.model.form import InlineFormAdmin
 from flask_security import current_user
-from wtforms import fields, TextAreaField, PasswordField
+import requests
+from wtforms import fields
 from wtforms.widgets import TextArea
 from app import app
 from security import security, is_admin, is_user
@@ -14,7 +15,8 @@ from models import Problem, Solution, Toolbox, User, UserRoles, \
     SolutionImage, ToolboxImage, \
     SolutionVar, ToolboxVar, JsonField, Entry, \
     ProblemTag, ToolboxTag, SolutionTag, PublicKey
-from views import hash_entry
+from signatures import hash_entry
+from views import model_url
 
 admin = Admin(app, template_mode='bootstrap3')
 
@@ -187,9 +189,14 @@ class EntryModelView(ProtectedModelView):
     def after_model_change(self, form, model, is_created=False):
         """Update 'latest' links and entry hashes."""
         model.latest = model.id
+        model.save()
         # Hash updated content and store result with model
         if isinstance(model, Entry):
-            model.entry_hash = hash_entry(model)
+            entry_json = requests.get(model_url(model)).text
+            model.entry_hash = hash_entry(
+                entry_json,
+                hash_alg=app.config['ENTRY_HASH_FUNCTION']
+            )
         model.save()
 
 
