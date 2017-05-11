@@ -726,7 +726,7 @@ class EntryView(ResourceView):
         """
         if version is None:
             entry = self.model.get((self.model.id == entry_id))
-            if entry and entry.latest.id != entry.id:
+            if entry and not is_latest(entry):
                 raise DoesNotExist
         else:
             entry = self.model.get((self.model.latest == entry_id) &
