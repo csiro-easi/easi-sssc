@@ -83,6 +83,11 @@ class UserAdmin(ProtectedModelView):
         return is_admin()
 
 
+_ignored_dirty_fields = frozenset({
+    'published'
+})
+
+
 class EntryModelView(ProtectedModelView):
     """View for administering all Entries.
 
@@ -94,8 +99,10 @@ class EntryModelView(ProtectedModelView):
 
     """
     can_view_details = True
-    column_editable_list = ['name', 'description']
-    column_list = ['name', 'description', 'author', 'version', 'created_at']
+    column_editable_list = ['name', 'description', 'published']
+    column_filters = ['name', 'published', 'created_at']
+    column_list = ['name', 'description', 'author', 'version', 'created_at', 'published']
+    column_sortable_list = ['author', 'published', 'created_at']
     create_modal = True
     details_modal = False
     edit_modal = True
@@ -133,8 +140,10 @@ class EntryModelView(ProtectedModelView):
 
     def on_model_change(self, form, model, is_created=False):
         """Maintain model metadata."""
-        # Update model metadata
-        model.update_metadata(is_created)
+        # Update model metadata, unless it's just changing the published
+        # status.
+        if not model._dirty.issubset(_ignored_dirty_fields):
+            model.update_metadata(is_created)
 
     def after_model_change(self, form, model, is_created=False):
         """Update 'latest' links and entry hashes."""

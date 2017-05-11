@@ -260,7 +260,7 @@ class Entry(BaseModel):
         """Update metadata for this model, including versioning and authorship.
 
         """
-        # If we have no id, or is_created = True, just set the author.
+        # If it's a new entry, just set the author.
         if is_created or self.id is None:
             self.author = current_user.id
         else:
