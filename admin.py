@@ -189,6 +189,7 @@ class EntryModelView(ProtectedModelView):
     def after_model_change(self, form, model, is_created=False):
         """Update 'latest' links and entry hashes."""
         model.latest = model.id
+        model.save()
         # Hash updated content and store result with model
         if isinstance(model, Entry):
             entry_json = requests.get(model_url(model)).text
