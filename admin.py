@@ -21,6 +21,12 @@ from views import model_url
 admin = Admin(app, template_mode='bootstrap3')
 
 
+# Fields that do not cause a version change when they are changed.
+_ignored_dirty_fields = frozenset({
+    'published'
+})
+
+
 class VarValuesConverter(CustomModelConverter):
     def __init__(self, view, additional=None):
         super().__init__(view, additional)
@@ -83,9 +89,14 @@ class UserAdmin(ProtectedModelView):
         return is_admin()
 
 
-_ignored_dirty_fields = frozenset({
-    'published'
-})
+def is_version_bump_required(model):
+    """Return True if the pending changes to model require a version bump.
+
+    This relies on checking the dirty fields of model, so must be called before
+    the changes are saved.
+
+    """
+    return not model._dirty.issubset(_ignored_dirty_fields)
 
 
 class EntryModelView(ProtectedModelView):
@@ -142,11 +153,11 @@ class EntryModelView(ProtectedModelView):
         """Maintain model metadata."""
         # Update model metadata, unless it's just changing the published
         # status.
-        if not model._dirty.issubset(_ignored_dirty_fields):
+        if is_version_bump_required(model):
             model.update_metadata(is_created)
 
     def after_model_change(self, form, model, is_created=False):
-        """Update 'latest' links and entry hashes."""
+        """Update 'latest' links and entry hashes once we have an id."""
         model.latest = model.id
         model.save()
         # Hash updated content and store result with model
