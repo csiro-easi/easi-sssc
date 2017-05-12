@@ -1,16 +1,23 @@
 import argparse
-import binascii
 from datetime import datetime
 from rsa import PrivateKey
 import rsa
-
+import requests
 from signatures import canonical_form, hash_canonical_entry
+import json
+import base64
 
 #
 # Key Pair creation:
 # Private key: openssl genrsa -out rsakey.pem 2048
 # Public  key: openssl rsa -in rsakey.pem -RSAPublicKey_out > rsakey.pub.pem
 #
+
+
+def post_dict(dict, url, auth = None):
+    headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+    r = requests.post(url, data=json.dumps(dict), headers=headers, auth=auth)
+    return r
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Sign a SSSC entry")
@@ -41,15 +48,19 @@ if __name__ == '__main__':
 
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
-    # signable_str = entry_hash+"$"+now
-    signable_str = entry_hash
+    signable_str = entry_hash+"$"+now
 
     with open(args.key, "r") as key_file:
         key_str = key_file.read()
         private_key = PrivateKey.load_pkcs1(key_str)
 
     signature  = rsa.sign(signable_str.encode("UTF-8"), private_key, "SHA-256")
+    signature_str = base64.encodebytes(signature).decode('utf-8')
+    print(signature_str)
 
-    print(binascii.hexlify(signature))
+    signature_payload = {'signed_string': signable_str, 'signature': signature_str, 'entry_id': args.sourceurl}
+
+    sig_post_res = post_dict(signature_payload, args.signatureurl, auth=(args.username, args.passwd))
+    print(sig_post_res)
 
     print("end")

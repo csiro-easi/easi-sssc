@@ -1,4 +1,3 @@
-import datetime
 from flask import (Blueprint, request, render_template, url_for,
                    jsonify, make_response, abort)
 from flask.json import JSONEncoder
@@ -20,7 +19,7 @@ from werkzeug.exceptions import NotAcceptable
 from peewee import SelectQuery, DoesNotExist
 from rdflib import BNode, URIRef
 from rdflib.namespace import RDF
-
+from datetime import datetime, date, time, timedelta
 
 site = Blueprint('site', __name__, template_folder='templates')
 
@@ -54,9 +53,9 @@ class SSSCJSONEncoder(JSONEncoder):
                          iterable_as_array=iterable_as_array)
 
     def default(self, o):
-        if (isinstance(o, datetime.datetime) or
-            isinstance(o, datetime.date) or
-            isinstance(o, datetime.time)):
+        if (isinstance(o, datetime) or
+            isinstance(o, date) or
+            isinstance(o, time)):
             return o.isoformat()
 
         return JSONEncoder.default(self, o)
@@ -955,28 +954,45 @@ class SignatureView(ResourceView):
     @auth_required('token', 'session', 'basic')
     def post(self):
         data = request.get_json()
-        entry_hash = data.get('entry_hash')
+        signed_string = data.get('signed_string')
         signature = data.get('signature')
         uri = data.get('entry_id')
-        if entry_hash is None or signature is None or uri is None:
-            abort(400)
+        if signed_string is None or signature is None or uri is None:
+            return "Request parameter(s) missing", 400
         # Find the Entry to link it to
         entry_dict = requests.get(uri, params=dict(_include_ids=True)).json()
         if not entry_dict:
-            abort(404)
+            return "Entry for signature could not be found", 404
+
+        sig_fields = signed_string.split('$')
+
+        if len(sig_fields) != 2:
+            return "Signable string not of correct form 'hash$date'", 400
+
+        now = datetime.utcnow()
+        sign_time = datetime.strptime(sig_fields[1], "%Y-%m-%d %H:%M:%S")
+
+        delta_t = now- sign_time
+
+        if delta_t.total_seconds() > 5*60:
+            return "Signature older than 5 minutes", 400
+
+        entry_hash = sig_fields[0]
+
         # Make sure their hash is the same as our hash for the requested entry.
         if entry_hash != entry_dict['entry_hash']:
             return "Client hash does not match saved hash.", 400
         # Verify the signature using the user's current public key
         public_key = current_user.public_key
         verified, verify_msg = verify_signature(signature,
-                                                entry_hash,
+                                                signed_string,
                                                 public_key.key)
         if verified:
             rel_class, rel_field = signature_relation(entry_dict)
             if rel_class:
                 sig_instance = Signature(signature=signature,
-                                         public_key=public_key)
+                                         public_key=public_key,
+                                         signed_string=signed_string)
                 # Add the metadata
                 sig_instance.user_id = User.get(User.id == current_user.id)
                 sig_instance.save()

@@ -1,23 +1,27 @@
-import binascii
 import datetime
 from flask import json
 import hashlib
 import rsa
+import base64
 
-
-def verify_signature(signature, entry_hash, user_key):
+def verify_signature(signature, signed_string, user_key):
     """Verify signature is valid for entry_hash and signed with user_key.
 
     Return True if valid and correct.
 
     """
-    signature = binascii.unhexlify(signature)
-    entry_hash = entry_hash.encode()
-    pubkey = rsa.PublicKey.load_pkcs1(user_key.encode())
+    signature_bytes = base64.b64decode(signature)
+    signed_bytes = signed_string.encode('utf-8')
+    pubkey = None
+
+    try:
+        pubkey = rsa.PublicKey.load_pkcs1(user_key.encode())
+    except ValueError:
+        pubkey = rsa.PublicKey.load_pkcs1_openssl_pem(user_key.encode())
 
     # Check signature is valid using user_key
     try:
-        rsa.verify(entry_hash, signature, pubkey)
+        rsa.verify(signed_bytes, signature_bytes, pubkey)
     except rsa.pkcs1.VerificationError as e:
         return False, e.message
 
