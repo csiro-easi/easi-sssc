@@ -107,9 +107,9 @@ def model_url(model, version=None, pinned=False, endpoint=None, **kwargs):
 
     """
     if model and type(model) in _model_api:
-        model_id = (model.entry_id
-                    if hasattr(model, 'entry_id')
-                    else model.id)
+        pk_id = (model.entry_id
+                 if hasattr(model, 'entry_id')
+                 else model.id)
         if not hasattr(model, 'latest') or model.latest is None:
             latest_id = None
         else:
@@ -117,12 +117,12 @@ def model_url(model, version=None, pinned=False, endpoint=None, **kwargs):
         model_class = type(model)
         model_version = (model.version if hasattr(model, 'version')
                          else None)
-        args = {model_pk(model_class): model_id}
+        args = {model_pk(model_class): pk_id}
         # Is it an Entry?
         if issubclass(model_class, Entry):
             if version is not None:
                 args['version'] = version
-            elif pinned or (latest_id is not None and latest_id != model_id):
+            elif pinned or (latest_id is not None and latest_id != model.id):
                 args['version'] = model_version
 
         # Determine endpoint to use
