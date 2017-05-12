@@ -19,7 +19,7 @@ from models import db, Toolbox, Entry, Problem, Solution, text_search, \
     is_latest, User, \
     License, BaseModel, Role, Dependency, Signature, PublicKey, \
     ProblemSignature, ToolboxSignature, SolutionSignature
-from security import is_admin
+from security import is_admin, EditEntryPermission, PublishEntryPermission
 from signatures import verify_signature
 from namespaces import PROV
 
@@ -84,6 +84,38 @@ _model_api = {}
 _jsonld_context = {
     "prov": "http://www.w3.org/ns/prov#"
 }
+
+
+boolean_true_strings = frozenset({
+    'yes',
+    'true',
+    '1',
+    'y',
+    't'
+})
+
+boolean_false_strings = frozenset({
+    'no',
+    'false',
+    '0',
+    'n',
+    'f'
+})
+
+
+def parse_boolean_param(value):
+    """Parse query parameter value as a boolean."""
+    if value is not None:
+        if isinstance(value, str):
+            if value in boolean_true_strings:
+                return True
+            elif value in boolean_false_strings:
+                return False
+        else:
+            return bool(value)
+
+    # Could not determine a boolean value.
+    return None
 
 
 def model_endpoint(model_class):
@@ -747,10 +779,47 @@ class EntryView(ResourceView):
             resp.location = model_url(entry)
             return resp
 
+    @auth_required('token', 'session', 'basic')
+    @roles_accepted('user', 'moderator', 'admin')
+    def patch(self, entry_id):
+        """Update a single entry."""
+        # Check entry is valid
+        version = request.args.get('version')
+        entry = self.get_one(entry_id, version=version)
+        if not entry:
+            abort(404)
+
+        # Ensure the user has the correct permissions for the current configuration
+        permission = PublishEntryPermission(entry_id)
+        if not permission.can():
+            abort(403)
+
+        # Get the request payload
+        data = request.get_json()
+        if not data:
+            return 'No JSON content found in request.', 400, None
+
+        # Support updating published field only for now
+        if len(data) != 1 or 'published' not in data:
+            return 'The "published" field is the only one that can be updated using PATCH on an entry.', 400, None
+
+        # Update the entry
+        published = parse_boolean_param(data.get('published'))
+        if published is not None:
+            entry.published = published
+            entry.save()
+            return jsonldify(model_to_dict(entry))
+
+        # Failed to update
+        abort(422)
+
     def delete(self, entry_id):
+
+
         """Delete an entry."""
         id = None
-        entry = self.query(entry_id)
+        version = request.args.get('version')
+        entry = self.get_one(entry_id, version=version)
         if entry:
             id = entry.id
             entry.delete()
