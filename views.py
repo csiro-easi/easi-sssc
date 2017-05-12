@@ -1,25 +1,27 @@
+from datetime import datetime, date, time
 from flask import (Blueprint, request, render_template, url_for,
                    jsonify, make_response, abort)
 from flask.json import JSONEncoder
 from flask.views import MethodView
 from flask_security import current_user
 from flask_security.decorators import auth_required, roles_accepted
-from markdown import markdown
 from functools import wraps
+from markdown import markdown
+from peewee import SelectQuery, DoesNotExist
+from rdflib import BNode, URIRef
+from rdflib.namespace import RDF
+from urllib.parse import parse_qs, urlparse
+from werkzeug.exceptions import NotAcceptable
+from werkzeug.routing import RequestRedirect, MethodNotAllowed, NotFound
+
 from app import app
 from models import db, Toolbox, Entry, Problem, Solution, text_search, \
     is_latest, User, \
     License, BaseModel, Role, Dependency, Signature, PublicKey, \
     ProblemSignature, ToolboxSignature, SolutionSignature
-import requests
 from security import is_admin
 from signatures import verify_signature
 from namespaces import PROV
-from werkzeug.exceptions import NotAcceptable
-from peewee import SelectQuery, DoesNotExist
-from rdflib import BNode, URIRef
-from rdflib.namespace import RDF
-from datetime import datetime, date, time, timedelta
 
 site = Blueprint('site', __name__, template_folder='templates')
 
@@ -628,6 +630,54 @@ class ResourceView(MethodView):
                            .format(key, type(resource).__name__))
 
 
+def get_view_func(url, method='GET'):
+    """Return the view function and arguments matching url, or None."""
+    adapter = app.url_map.bind(app.config['SERVER_NAME'])
+
+    try:
+        match = adapter.match(url, method=method)
+    except RequestRedirect as e:
+        # Recursively match redirects
+        return get_view_func(e.new_url, method)
+    except (MethodNotAllowed, NotFound):
+        # no match
+        return None
+
+    try:
+        # return the view function and arguments
+        return app.view_functions[match[0]], match[1]
+    except KeyError:
+        # No view is associated with the endpoint
+        return None
+
+
+def get_models_for_url(url, method='GET'):
+    """Return the model(s) identified by url, or None.
+
+    Match url to a view function, then call the corresponding getter on the
+    view class with the url and query parameters.
+
+    """
+    # Parse url to extract the path and query components.
+    parsed_url = urlparse(url)
+    # Strip singleton query param values out of the lists that parse_qs returns
+    # them in, e.g. {'foo': ['bar']} => {'foo': 'bar'}.
+    query = {k: v[0] if len(v) == 1 else v
+             for k, v in parse_qs(parsed_url.query).items()}
+
+    # Look for view function matching url path
+    match = get_view_func(parsed_url.path, method=method)
+    if not match:
+        return None
+    view_func, view_args = match
+
+    # Merge any query params with view_args
+    query.update(view_args)
+
+    # Find the view class and call the model lookup function for view_func.
+    return view_func.view_class.get_models(**query)
+
+
 class EntryView(ResourceView):
     detail_template = 'entries/detail.html'
     model = None
@@ -643,12 +693,9 @@ class EntryView(ResourceView):
                     key: [model_to_dict(entry) for entry in entries]
                 })
             elif best == "text/html":
-                if entries:
-                    entries_url = url_for(model_endpoint(type(entries[0])),
-                                          _external=True,
-                                          mimetype='application/json')
-                else:
-                    entries_url = None
+                entries_url = url_for(model_endpoint(type(entries[0])),
+                                      _external=True,
+                                      mimetype='application/json')
                 return render_template(
                     'entries/list.html',
                     entry_type=pluralise(self.model.__name__),
@@ -715,7 +762,8 @@ class EntryView(ResourceView):
         return dict(entry=entry,
                     entry_type=type(entry).__name__)
 
-    def get_one(self, entry_id, version=None):
+    @classmethod
+    def get_one(cls, entry_id, version=None, **kwargs):
         """Query model for the entry with id and optionally a version.
 
         If a version is specified, return the corresponding entry. If no
@@ -723,18 +771,29 @@ class EntryView(ResourceView):
         latest version*.
 
         """
+        model = cls.model
         if version is None:
-            entry = self.model.get((self.model.id == entry_id))
+            entry = model.get((model.id == entry_id))
             if entry and not is_latest(entry):
                 raise DoesNotExist
         else:
-            entry = self.model.get((self.model.latest == entry_id) &
-                                   (self.model.version == version))
+            entry = model.get((model.latest == entry_id) &
+                              (model.version == version))
         return entry
 
-    def get_list(self):
+    @classmethod
+    def get_list(cls, **kwargs):
         """Return a list of latest entries for this model."""
-        return self.model.select().where(self.model.id == self.model.latest)
+        model = cls.model
+        return model.select().where(model.id == model.latest)
+
+    @classmethod
+    def get_models(cls, entry_id=None, **kwargs):
+        """Return the model(s) for entry_id and version."""
+        if id is None:
+            return cls.get_list(**kwargs)
+        else:
+            return cls.get_one(entry_id, **kwargs)
 
 
 class ProblemView(EntryView):
@@ -916,19 +975,11 @@ class LicenseView(ResourceView):
             return jsonldify(model_to_dict(license))
 
 
-_signature_relations = {
-    'sssc:Problem': (ProblemSignature, 'problem'),
-    'sssc:Toolbox': (ToolboxSignature, 'toolbox'),
-    'sssc:Solution': (SolutionSignature, 'solution')
-}
-
-
-def signature_relation(entry_dict):
-    """Return the signature relation for entry and fk name."""
-    if entry_dict:
-        for t in entry_dict['@type']:
-            if t in _signature_relations:
-                return _signature_relations[t]
+def signature_relation(entry):
+    """Return the signature relation for entry and fk."""
+    fk = entry._meta.reverse_rel.get('signatures')
+    if fk:
+        return fk.model_class, fk.name
 
 
 class SignatureView(ResourceView):
@@ -960,8 +1011,8 @@ class SignatureView(ResourceView):
         if signed_string is None or signature is None or uri is None:
             return "Request parameter(s) missing", 400
         # Find the Entry to link it to
-        entry_dict = requests.get(uri, params=dict(_include_ids=True)).json()
-        if not entry_dict:
+        entry = get_models_for_url(uri)
+        if not entry:
             return "Entry for signature could not be found", 404
 
         sig_fields = signed_string.split('$')
@@ -980,7 +1031,8 @@ class SignatureView(ResourceView):
         entry_hash = sig_fields[0]
 
         # Make sure their hash is the same as our hash for the requested entry.
-        if entry_hash != entry_dict['entry_hash']:
+        # if entry_hash != entry_dict['entry_hash']:
+        if entry_hash != entry.entry_hash:
             return "Client hash does not match saved hash.", 400
         # Verify the signature using the user's current public key
         public_key = current_user.public_key
@@ -988,7 +1040,7 @@ class SignatureView(ResourceView):
                                                 signed_string,
                                                 public_key.key)
         if verified:
-            rel_class, rel_field = signature_relation(entry_dict)
+            rel_class, rel_field = signature_relation(entry)
             if rel_class:
                 sig_instance = Signature(signature=signature,
                                          public_key=public_key,
@@ -998,7 +1050,7 @@ class SignatureView(ResourceView):
                 sig_instance.save()
                 # Link signature to entry
                 rel = rel_class(signature=sig_instance)
-                setattr(rel, rel_field, entry_dict['id'])
+                setattr(rel, rel_field, entry.id)
                 rel.save()
                 url = model_url(sig_instance)
                 resp = make_response(url, 201)
