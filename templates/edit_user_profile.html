@@ -71,9 +71,9 @@
              public_key: $('#current_pk').text()
          })
      }).done(function() {
-         alert('Patched!');
+         alert('Key upload successful!');
      }).fail(function(jqXHR, textStatus, errorThrown) {
-         alert('Failed! ' + textStatus + ' ' + errorThrown);
+         alert('Key upload failed! ' + textStatus + ' ' + errorThrown);
      });
  });
 </script>

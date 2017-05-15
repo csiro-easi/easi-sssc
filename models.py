@@ -192,6 +192,7 @@ class Signature(BaseModel):
 
     """
     signature = CharField()
+    signed_string = TextField()
     created_at = DateTimeField(default=datetime.now)
     user_id = ForeignKeyField(User, null=True, related_name='signatures')
     public_key = ForeignKeyField(PublicKey, related_name='signatures')
