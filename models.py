@@ -63,24 +63,48 @@ def text_search(text):
     return matches
 
 
-def clone_model(model):
+_rels_ignored_for_cloning = frozenset({
+    'versions',
+    'problemindex_set',
+    'solutionindex_set',
+    'toolboxindex_set',
+    'signatures',
+    'solutions'
+})
+
+
+def clone_model(model, parent_field=None, parent_instance=None):
     """Create and return a clone of model.
 
     Save a clone of entry in the database, including all reverse relations
     (Vars, Deps etc).
 
+    If parent_field and parent_instance are provided, then set parent_field on
+    the cloned instance to parent_instance.
+
     """
-    # Copy current data
+    # Copy current data and clean the primary key
     data = dict(model._data)
-    # clear the primary key
     data.pop(model._meta.primary_key.name)
+
     # Create the new entry
     # TODO handle unique id/entry combo!
     copy = type(model).create(**data)
-    # Update references in copied relations to point to the clone
-    for n, f in copy._meta.reverse_rel.items():
-        for x in getattr(copy, n):
-            setattr(x, f.name, copy)
+
+    # Copy all child instances and point the copies at the clone.
+    for rel_name, fk_field in model._meta.reverse_rel.items():
+        # Ignore known relations.
+        if rel_name not in _rels_ignored_for_cloning:
+            for rel_instance in getattr(model, rel_name):
+                clone_model(rel_instance,
+                            parent_field=fk_field,
+                            parent_instance=copy)
+
+    # If this is a child instance, point it at the new parent.
+    if parent_field and parent_instance:
+        setattr(copy, parent_field.name, parent_instance)
+
+    # Save and return the copy
     copy.save()
     return copy
 
