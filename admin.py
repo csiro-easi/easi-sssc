@@ -1,20 +1,20 @@
-from flask import abort, redirect, request, url_for
-from flask_admin import Admin, helpers as admin_helpers, expose
+from flask import abort, flash, redirect, request, url_for
+from flask_admin import Admin, helpers as admin_helpers
+from flask_admin.actions import action
+from flask_admin.babel import gettext, ngettext
 from flask_admin.contrib.peewee import ModelView
 from flask_admin.contrib.peewee.form import CustomModelConverter
-from flask_admin.form import BaseForm, rules
-from flask_admin.model.form import InlineFormAdmin
+from flask_admin.form import BaseForm
 from flask_security import current_user
 import requests
 from wtforms import fields
-from wtforms.widgets import TextArea
 from app import app
 from security import security, is_admin, is_user
 from models import Problem, Solution, Toolbox, User, UserRoles, \
     SolutionDependency, ToolboxDependency, \
     SolutionImage, ToolboxImage, \
     SolutionVar, ToolboxVar, JsonField, Entry, \
-    ProblemTag, ToolboxTag, SolutionTag, PublicKey
+    ProblemTag, ToolboxTag, SolutionTag
 from signatures import hash_entry
 from views import model_url
 
@@ -110,7 +110,7 @@ class EntryModelView(ProtectedModelView):
 
     """
     can_view_details = True
-    column_editable_list = ['name', 'description', 'published']
+    column_editable_list = ['name', 'description']
     column_filters = ['name', 'published', 'created_at']
     column_list = ['name', 'description', 'author', 'version', 'created_at', 'published']
     column_sortable_list = ['author', 'published', 'created_at']
@@ -121,7 +121,8 @@ class EntryModelView(ProtectedModelView):
                              'latest',
                              'version',
                              'created_at',
-                             'entry_hash']
+                             'entry_hash',
+                             'published']
 
     # If user does not have the 'admin' role, only allow them to administer
     # their own views.
@@ -168,6 +169,56 @@ class EntryModelView(ProtectedModelView):
                 hash_alg=app.config['ENTRY_HASH_FUNCTION']
             )
         model.save()
+
+    @action("publish", "Publish",
+            "Are you sure you want to publish the selected entries?")
+    def action_publish(self, ids):
+        try:
+            query = self.model.select().where(self.model.id.in_(ids))
+
+            count = 0
+            for instance in query:
+                if not instance.published:
+                    instance.published = True
+                    instance.save()
+                    count += 1
+
+            flash(ngettext('Entry was successfully published.',
+                           '%(count)s entries were successfully published.',
+                           count,
+                           count=count))
+        except Exception as ex:
+            if not self.handle_view_exception(ex):
+                raise
+            flash(
+                gettext('Failed to publish entries. %(error)s', error=str(ex)),
+                'error'
+            )
+
+    @action("unpublish", "Unpublish",
+            "Are you sure you want to unpublish the selected entries?")
+    def action_unpublish(self, ids):
+        try:
+            query = self.model.select().where(self.model.id.in_(ids))
+
+            count = 0
+            for instance in query:
+                if instance.published:
+                    instance.published = False
+                    instance.save()
+                    count += 1
+
+            flash(ngettext('Entry was successfully unpublished.',
+                           '%(count)s entries were successfully unpublished.',
+                           count,
+                           count=count))
+        except Exception as ex:
+            if not self.handle_view_exception(ex):
+                raise
+            flash(
+                gettext('Failed to unpublish entries. %(error)s', error=str(ex)),
+                'error'
+            )
 
 
 class ProblemAdmin(EntryModelView):

@@ -1,6 +1,6 @@
 from datetime import datetime, date, time
 from flask import (Blueprint, request, render_template, url_for,
-                   jsonify, make_response, abort)
+                   jsonify, make_response, abort, redirect, flash)
 from flask.json import JSONEncoder
 from flask.views import MethodView
 from flask_security import current_user
@@ -19,7 +19,8 @@ from models import db, Toolbox, Entry, Problem, Solution, text_search, \
     is_latest, User, \
     License, BaseModel, Role, Dependency, Signature, PublicKey, \
     ProblemSignature, ToolboxSignature, SolutionSignature
-from security import is_admin, EditEntryPermission, PublishEntryPermission
+from security import is_admin, EditEntryPermission, PublishEntryPermission, \
+    ViewUnpublishedPermission
 from signatures import verify_signature
 from namespaces import PROV
 
@@ -194,6 +195,14 @@ def edit_url(entry, url=None):
                        _external=True,
                        id=entry.id,
                        url=url)
+
+
+def publish_url(entry):
+    """Return the URL for publishing entry."""
+    if entry:
+        return url_for("site.publish_entry",
+                       _external=True,
+                       entry=model_url(entry))
 
 
 # These fields should *never* be returned to clients
@@ -398,11 +407,18 @@ def entry_type(entry):
     return type(entry).__name__
 
 
+def can_publish(entry):
+    """Return True if the current user can publish entry."""
+    return PublishEntryPermission(entry.id).can()
+
+
 @site.context_processor
 def entry_processor():
     return dict(entry_type=entry_type,
                 model_url=model_url,
-                edit_url=edit_url)
+                edit_url=edit_url,
+                publish_url=publish_url,
+                can_publish=can_publish)
 
 
 def add_context(response, context=_jsonld_context, embed=True):
@@ -725,7 +741,7 @@ class EntryView(ResourceView):
                     key: [model_to_dict(entry) for entry in entries]
                 })
             elif best == "text/html":
-                entries_url = url_for(model_endpoint(type(entries[0])),
+                entries_url = url_for(model_endpoint(self.model),
                                       _external=True,
                                       mimetype='application/json')
                 return render_template(
@@ -739,9 +755,8 @@ class EntryView(ResourceView):
                 pass
         else:
             version = request.args.get('version')
-            try:
-                entry = self.get_one(entry_id, version)
-            except:
+            entry = self.get_one(entry_id, version)
+            if not entry:
                 abort(404)
             if request.url.endswith('/prov'):
                 return self.prov_view(entry)
@@ -790,8 +805,7 @@ class EntryView(ResourceView):
             abort(404)
 
         # Ensure the user has the correct permissions for the current configuration
-        permission = PublishEntryPermission(entry_id)
-        if not permission.can():
+        if not PublishEntryPermission(entry_id).can():
             abort(403)
 
         # Get the request payload
@@ -814,8 +828,6 @@ class EntryView(ResourceView):
         abort(422)
 
     def delete(self, entry_id):
-
-
         """Delete an entry."""
         id = None
         version = request.args.get('version')
@@ -841,20 +853,46 @@ class EntryView(ResourceView):
 
         """
         model = cls.model
-        if version is None:
-            entry = model.get((model.id == entry_id))
-            if entry and not is_latest(entry):
-                raise DoesNotExist
-        else:
-            entry = model.get((model.latest == entry_id) &
-                              (model.version == version))
+        try:
+            if version is None:
+                entry = model.get(
+                    (model.id == entry_id) &
+                    (model.id == model.latest)
+                )
+            else:
+                entry = model.get((model.latest == entry_id) &
+                                  (model.version == version))
+        except DoesNotExist:
+            return None
+
+        if (not entry.published and
+            (entry.author.id != current_user.id and
+             not ViewUnpublishedPermission.can())):
+            return None
+
         return entry
 
     @classmethod
     def get_list(cls, **kwargs):
-        """Return a list of latest entries for this model."""
+        """Return a list of latest entries for this model.
+
+        Does not include unpublished entries unless the current user has
+        permission to view unpublished entries, or they belong to the current
+        user.
+
+        """
         model = cls.model
-        return model.select().where(model.id == model.latest)
+        constraints = (model.id == model.latest)
+
+        # Only return published entries, and those belonging to the current
+        # user, unless the user has permission to view unpublished ones.
+        if not ViewUnpublishedPermission.can():
+            constraints = constraints & (
+                (model.published == True) |
+                (model.author == current_user.id)
+            )
+
+        return model.select().where(constraints)
 
     @classmethod
     def get_models(cls, entry_id=None, **kwargs):
@@ -1150,12 +1188,15 @@ class SignatureView(ResourceView):
 # Dispatch to json/html views
 def register_api(model, view, endpoint, url, pk='id', pk_type='int'):
     """Register the rules for a model api."""
+    # Store model-to-endpoint mappings for later lookup
     if isinstance(model, list):
         models = model
     else:
         models = [model]
     for m in models:
         _model_api[m] = (endpoint, url, pk, pk_type)
+
+    # Create standard REST endpoints
     view_func = view.as_view(endpoint)
     site.add_url_rule(url, defaults={pk: None},
                       view_func=view_func, methods=['GET'])
@@ -1164,6 +1205,8 @@ def register_api(model, view, endpoint, url, pk='id', pk_type='int'):
                       view_func=view_func, methods=['GET', 'PATCH', 'DELETE'])
     site.add_url_rule('{}<{}:{}>/<{}:{}>'.format(url, pk_type, pk, 'string', 'prop'),
                       view_func=view_func, methods=['PUT'])
+
+    # Prov endpoint
     prov_view_func = view.as_view(endpoint + '_prov')
     site.add_url_rule('{}<{}:{}>/prov'.format(url, pk_type, pk),
                       view_func=prov_view_func, methods=['GET'])
@@ -1181,6 +1224,7 @@ register_api([ProblemSignature, ToolboxSignature, SolutionSignature, Signature],
 @roles_accepted('admin', 'user')
 @site.route('/edit/users/<int:user_id>')
 def edit_user(user_id):
+    """Editable user profile."""
     user = User.get(User.id == user_id)
     if not user:
         abort(404)
@@ -1189,6 +1233,50 @@ def edit_user(user_id):
         abort(403)
 
     return render_template('edit_user_profile.html', user=user)
+
+
+@site.route('/publish', methods=['GET'])
+@auth_required('token', 'session', 'basic')
+def publish_entry():
+    """Publish an entry identified by uri.
+
+    If the entry has already been published, do nothing but succeed.
+
+    If it was a JSON request, return the entry data on success.
+
+    For an HTML request redirect to the entry info page, with a success or
+    error flash message as appropriate.
+
+    """
+    # Ensure the uri is a valid entry identifier, and retrieve the entry
+    # instance.
+    uri = request.args.get('entry')
+    entry = get_models_for_url(uri)
+    if not entry:
+        abort(404)
+    elif not isinstance(entry, Entry):
+        return 'URI ({}) does not identify a unique entry.'.format(uri), 400
+
+    # Make sure we have permission to publish the entry.
+    if not PublishEntryPermission(entry.id).can():
+        abort(403)
+
+    # Publish the entry (if required), and return the current status of the
+    # entry.
+    try:
+        if not entry.published:
+            entry.published = True
+            entry.save()
+    except Exception as ex:
+        flash('Failed to publish entry: {}'.format(str(ex)), 'error')
+    else:
+        flash('Entry was published successfully.')
+
+    best = best_mimetype('application/json', 'text/html')
+    if best == 'text/html':
+        return redirect(model_url(entry))
+    else:
+        return jsonify(model_to_dict(entry))
 
 
 @site.route('/search')

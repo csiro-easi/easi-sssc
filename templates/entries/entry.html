@@ -4,9 +4,13 @@
   <div class="panel-heading">
     <h3 class="panel-title">
       <a href="{{ url }}">{{ entry.name }}</a>
+      {% if not entry.published %}<small>(DRAFT)</small>{% endif %}
       <!-- </h3> -->
       <div class="btn-toolbar pull-right">
         <div class="btn-group">
+          {% if not entry.published and can_publish(entry) %}
+          <a class="btn btn-link btn-xs confirm-publish" role="button" href="{{publish_url(entry)}}">Publish</a>
+          {% endif %}
           {% if entry.author.id == current_user.id %}
           {% if entry.id == entry.latest.id %}
           <a class="btn btn-link btn-xs" role="button" href="{{ edit_url(entry, url=request.full_path) }}">Edit</a>

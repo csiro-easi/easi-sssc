@@ -40,6 +40,15 @@ CreateEntryPermission.__doc__ = """Permission to create an entry.
 DeleteEntryPermission = Permission(RoleNeed('admin'))
 DeleteEntryPermission.__doc__ = """Only admin users can delete entries."""
 
+ViewUnpublishedPermission = Permission(
+    RoleNeed('admin'),
+    *[RoleNeed(role) for role in app.config['PUBLISH_MODERATOR_ROLES']]
+)
+ViewUnpublishedPermission.__doc__ = """Permission to view unpublished entries.
+
+Admins and moderators can view unpublished entries.
+"""
+
 
 class EditEntryPermission(Permission):
     """Permission to edit an entry.
