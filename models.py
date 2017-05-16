@@ -210,6 +210,37 @@ class Signature(BaseModel):
         return None
 
 
+class ResourceCheck(object):
+    """Stores the results of a resources check for an Entry.
+
+    Changes is a list that will contain a (field, url) pair for each field that
+    has changed since it was last checked.
+
+    Errors is a list of (field, errors) tuples for fields that caused
+    exceptions when they were checked.
+
+    """
+    def __init__(self):
+        self.checks = []
+
+    def succeeded(self):
+        """Return True if all checks succeeded."""
+        return all(check['errors'] is None for check in self.checks)
+
+    def add_check(self, field, url, is_changed=False, errors=None):
+        """Add a check result for field/url."""
+        self.checks.append(dict(field=field, url=url, is_changed=is_changed,
+                                errors=errors))
+
+    def get_changed(self):
+        """Return the checks that indicated the value changed."""
+        return (check for check in self.checks if check['is_changed'])
+
+    def get_errors(self):
+        """Return the checks that raised errors."""
+        return (check for check in self.checks if check['errors'])
+
+
 class Entry(BaseModel):
     """Base information shared by all entries.
 
@@ -234,25 +265,42 @@ class Entry(BaseModel):
 
     _semantic_types = [PROV.Entity]
 
-    def _check_resources(self, resources=None):
+    def check_resources(self, resources=None):
         """Check any resources, update any that have changed.
 
-        Returns a list of (field, url) for any resources that have changed
-        since they were last checked.
+        Returns a ResourceCheck object with the results of the checks.
 
         """
-        print('checking resources for', str(self))
-        changed = []
+        checks = ResourceCheck()
         if resources:
             for rfield, hfield in resources:
                 url = getattr(self, rfield)
+
+                # Handle an empty resource field. Ignore it if it's nullable,
+                # otherwise raise an error since validation has failed
+                # somewhere.
+                if not url:
+                    if self._meta.fields.get(rfield).null:
+                        continue
+                    else:
+                        raise ValueError('Required resource field {} of {} is emptry.'
+                                         .format(rfield, type(self).__name__))
+
                 old_hash = getattr(self, hfield)
-                r = requests.get(url)
-                new_hash = resource_hash(r.content).hexdigest()
-                if new_hash != old_hash:
-                    changed.append((rfield, url))
-                    setattr(self, hfield, new_hash)
-        return changed
+                new_hash = None
+                is_changed = None
+                errors = None
+                try:
+                    req = requests.get(url, timeout=app.config['RESOURCE_TIMEOUT'])
+                except requests.exceptions.RequestException as e:
+                    errors = [e]
+                else:
+                    new_hash = resource_hash(req.content).hexdigest()
+                    is_changed = new_hash != old_hash
+                    if is_changed:
+                        setattr(self, hfield, new_hash)
+                checks.add_check(rfield, url, is_changed, errors)
+        return checks
 
     def update_metadata(self, is_created=False):
         """Update metadata for this model, including versioning and authorship.
@@ -273,8 +321,6 @@ class Entry(BaseModel):
             # Increment the version on the latest entry, and the timestamp
             self.version = self.version + 1
             self.created_at = datetime.now()
-        # Check resources at this point
-        self._check_resources()
 
     def __unicode__(self):
         return "entry ({})".format(self.name)
@@ -381,10 +427,11 @@ class Toolbox(Entry):
         null=True,
         help_text="Puppet module that instantiates this Toolbox."
     )
-    puppet_hash = CharField()
+    puppet_hash = CharField(null=True)
 
-    def _check_resources(self, resources=[('puppet', 'puppet_hash')]):
-        super()._check_resources(resources)
+    def check_resources(self, resources=None):
+        resources = resources or [('puppet', 'puppet_hash')]
+        return super().check_resources(resources)
 
 
 class ToolboxTag(Tag):
@@ -417,12 +464,13 @@ class Solution(Entry):
     problem = ForeignKeyField(Problem, related_name="solutions")
     runtime = CharField(choices=RUNTIME_CHOICES, default="python")
     template = CharField(help_text="URL of template that implements this Solution.")
-    template_hash = CharField()
+    template_hash = CharField(null=True)
 
     _semantic_types = [PROV.Entity, PROV.Plan]
 
-    def _check_resources(self, resources=(('template', 'template_hash'),)):
-        super()._check_resources(resources)
+    def check_resources(self, resources=None):
+        resources = resources or [('template', 'template_hash')]
+        return super().check_resources(resources)
 
 
 class SolutionTag(Tag):

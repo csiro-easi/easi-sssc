@@ -1,4 +1,4 @@
-from flask import abort, redirect, request, url_for
+from flask import abort, redirect, request, url_for, flash
 from flask_admin import Admin, helpers as admin_helpers, expose
 from flask_admin.contrib.peewee import ModelView
 from flask_admin.contrib.peewee.form import CustomModelConverter
@@ -185,6 +185,12 @@ class EntryModelView(ProtectedModelView):
         """Maintain model metadata."""
         # Update model metadata
         model.update_metadata(is_created)
+        # Check external resources
+        checks = model.check_resources()
+        if not checks.succeeded():
+            for check in checks.get_errors():
+                for e in check['errors']:
+                    flash('{}: {}'.format(type(e), e))
 
     def after_model_change(self, form, model, is_created=False):
         """Update 'latest' links and entry hashes."""
