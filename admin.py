@@ -1,5 +1,5 @@
 from flask import abort, flash, redirect, request, url_for
-from flask_admin import Admin, helpers as admin_helpers
+from flask_admin import Admin, helpers as admin_helpers, expose
 from flask_admin.actions import action
 from flask_admin.babel import gettext, ngettext
 from flask_admin.contrib.peewee import ModelView
@@ -152,10 +152,18 @@ class EntryModelView(ProtectedModelView):
 
     def on_model_change(self, form, model, is_created=False):
         """Maintain model metadata."""
+
         # Update model metadata, unless it's just changing the published
         # status.
         if is_version_bump_required(model):
             model.update_metadata(is_created)
+
+        # Check external resources
+        checks = model.check_resources()
+        if not checks.succeeded():
+            for check in checks.get_errors():
+                for e in check['errors']:
+                    flash('{}: {}'.format(type(e), e))
 
     def after_model_change(self, form, model, is_created=False):
         """Update 'latest' links and entry hashes once we have an id."""
