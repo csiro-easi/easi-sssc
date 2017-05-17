@@ -73,17 +73,15 @@ _rels_ignored_for_cloning = frozenset({
 })
 
 
-def clone_model(model, parent_field=None, parent_instance=None):
+def clone_model(model):
     """Create and return a clone of model.
 
     Save a clone of entry in the database, including all reverse relations
     (Vars, Deps etc).
 
-    If parent_field and parent_instance are provided, then set parent_field on
-    the cloned instance to parent_instance.
-
     """
-    # Copy current data and clean the primary key
+    # Copy current data and clean the primary key and creation time so new ones
+    # are assigned.
     data = dict(model._data)
     data.pop(model._meta.primary_key.name)
 
@@ -96,16 +94,11 @@ def clone_model(model, parent_field=None, parent_instance=None):
         # Ignore known relations.
         if rel_name not in _rels_ignored_for_cloning:
             for rel_instance in getattr(model, rel_name):
-                clone_model(rel_instance,
-                            parent_field=fk_field,
-                            parent_instance=copy)
+                child = clone_model(rel_instance)
+                setattr(child, fk_field.name, copy)
+                child.save()
 
-    # If this is a child instance, point it at the new parent.
-    if parent_field and parent_instance:
-        setattr(copy, parent_field.name, parent_instance)
-
-    # Save and return the copy
-    copy.save()
+    # Return the copy
     return copy
 
 
@@ -119,7 +112,12 @@ def user_entries(user):
 
 
 def is_latest(entry):
-    """Return True if entry is the latest version."""
+    """Return True if entry is the latest version.
+
+    Latest field should be NULL for the latest version, but old instances might
+    have the latest field set to their own id instead, so check for that.
+
+    """
     return entry.latest is None or entry.latest.id == entry.id
 
 
@@ -285,11 +283,16 @@ class Entry(BaseModel):
     entry_hash = CharField(null=True)
     published = BooleanField(default=app.config['PUBLISH_DEFAULT'])
 
-    entry_id = property(lambda self: self.latest.id
-                        if self.latest is not None
-                        else None)
+    entry_id = property(
+        lambda self: self.id if self.latest is None else self.latest.id
+    )
 
     _semantic_types = [PROV.Entity]
+
+    # Fields that do not cause a version change when they are changed.
+    _ignored_dirty_fields = frozenset({
+        'published'
+    })
 
     def check_resources(self, resources=None):
         """Check any resources, update any that have changed.
@@ -328,14 +331,23 @@ class Entry(BaseModel):
                 checks.add_check(rfield, url, is_changed, errors)
         return checks
 
+    def is_version_bump_required(self):
+        """Return True if a new version of this entry must be created.
+
+        Depends on checking for dirty fields for pending changes to this model,
+        so must be called before the model is saved.
+
+        """
+        return not self._dirty.issubset(self._ignored_dirty_fields)
+
     def update_metadata(self, is_created=False):
-        """Update metadata for this model, including versioning and authorship.
+        """Update metadata for a new entry.
 
         """
         # If it's a new entry, just set the author.
         if is_created or self.id is None:
             self.author = current_user.id
-        else:
+        elif self.is_version_bump_required():
             # Find the old state of entry in the db
             E = self._meta.model_class
             old_entry = E.get(E.id == self.id)

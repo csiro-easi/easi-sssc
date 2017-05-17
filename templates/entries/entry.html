@@ -12,12 +12,13 @@
           <a class="btn btn-link btn-xs confirm-publish" role="button" href="{{publish_url(entry)}}">Publish</a>
           {% endif %}
           {% if entry.author.id == current_user.id %}
-          {% if entry.id == entry.latest.id %}
+          {% if entry.latest is none %}
           <a class="btn btn-link btn-xs" role="button" href="{{ edit_url(entry, url=request.full_path) }}">Edit</a>
           {% else %}
           <a class="btn btn-link btn-xs disabled" role="button" href="#">Edit</a>
           {% endif %}
           {% endif %}
+          <a class="btn btn-link btn-xs" role="button" href="{{ url_for('site.clone_entry', entry=url) }}">Clone</a>
         </div>
 
         <div class="btn-group">
@@ -26,14 +27,21 @@
             <span class="caret"></span>
           </button>
           <ul class="dropdown-menu">
-            {% for v in range(entry.latest.version, 0, -1) %}
-            <li {% if v == entry.version %}class="disabled"{% endif %}>
-              <a href="{{ model_url(entry, version=v) }}">
-                {{ v }}
-                {% if v == entry.latest.version %}(latest){% endif %}
+            {% with latest = entry.latest or entry %}
+            <li {% if latest == entry %}class="disabled"{% endif %}>
+              <a href="{{ model_url(latest) }}">
+                {{latest.version}} (latest)
               </a>
             </li>
+
+            {% for version in latest.versions|sort(reverse=True, attribute='version') %}
+            {% with v = version.version %}
+            <li {% if v == entry.version %}class="disabled"{% endif %}>
+              <a href="{{ model_url(entry, version=v) }}">{{ v }}</a>
+            </li>
+            {% endwith %}
             {% endfor %}
+            {% endwith %}
           </ul>
         </div>
       </div>
@@ -57,7 +65,7 @@
           <dt>Version</dt>
           <dd>{{ entry.version }}</dd>
           <dt>Keywords</dt>
-          <dd>{{ entry.keywords }}</dd>
+          <dd>{{ entry.tags|join(', ', attribute='tag') }}</dd>
 
           {% if entry.signatures %}
           <dt>Signed by</dt>

@@ -21,12 +21,6 @@ from views import model_url
 admin = Admin(app, template_mode='bootstrap3')
 
 
-# Fields that do not cause a version change when they are changed.
-_ignored_dirty_fields = frozenset({
-    'published'
-})
-
-
 class VarValuesConverter(CustomModelConverter):
     def __init__(self, view, additional=None):
         super().__init__(view, additional)
@@ -89,16 +83,6 @@ class UserAdmin(ProtectedModelView):
         return is_admin()
 
 
-def is_version_bump_required(model):
-    """Return True if the pending changes to model require a version bump.
-
-    This relies on checking the dirty fields of model, so must be called before
-    the changes are saved.
-
-    """
-    return not model._dirty.issubset(_ignored_dirty_fields)
-
-
 class EntryModelView(ProtectedModelView):
     """View for administering all Entries.
 
@@ -135,7 +119,7 @@ class EntryModelView(ProtectedModelView):
             query = query.where(self.model.author == current_user.id)
 
         # Do not allow changing history - hide old versions of entries.
-        query = query.where(self.model.latest == self.model.id)
+        query = query.where(self.model.latest == None)
 
         return query
 
@@ -152,11 +136,8 @@ class EntryModelView(ProtectedModelView):
 
     def on_model_change(self, form, model, is_created=False):
         """Maintain model metadata."""
-
-        # Update model metadata, unless it's just changing the published
-        # status.
-        if is_version_bump_required(model):
-            model.update_metadata(is_created)
+        # Update metadata
+        model.update_metadata(is_created)
 
         # Check external resources
         checks = model.check_resources()
@@ -166,17 +147,21 @@ class EntryModelView(ProtectedModelView):
                     flash('{}: {}'.format(type(e), e))
 
     def after_model_change(self, form, model, is_created=False):
-        """Update 'latest' links and entry hashes once we have an id."""
-        model.latest = model.id
-        model.save()
+        """Update entry hashes once we have an id."""
         # Hash updated content and store result with model
         if isinstance(model, Entry):
-            entry_json = requests.get(model_url(model)).text
+            url = model_url(model)
+            r = requests.get(url)
+            if r.status_code != 200:
+                flash('Failed to retrieve json for hashing entry: ' + url)
+                return
+
+            entry_json = r.text
             model.entry_hash = hash_entry(
                 entry_json,
                 hash_alg=app.config['ENTRY_HASH_FUNCTION']
             )
-        model.save()
+            model.save()
 
     @action("publish", "Publish",
             "Are you sure you want to publish the selected entries?")

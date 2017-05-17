@@ -16,7 +16,7 @@ from werkzeug.routing import RequestRedirect, MethodNotAllowed, NotFound
 
 from app import app
 from models import db, Toolbox, Entry, Problem, Solution, text_search, \
-    is_latest, User, \
+    is_latest, User, clone_model, \
     License, BaseModel, Role, Dependency, Signature, PublicKey, \
     ProblemSignature, ToolboxSignature, SolutionSignature
 from security import is_admin, EditEntryPermission, PublishEntryPermission, \
@@ -143,10 +143,6 @@ def model_url(model, version=None, pinned=False, endpoint=None, **kwargs):
         pk_id = (model.entry_id
                  if hasattr(model, 'entry_id')
                  else model.id)
-        if not hasattr(model, 'latest') or model.latest is None:
-            latest_id = None
-        else:
-            latest_id = model.latest.id
         model_class = type(model)
         model_version = (model.version if hasattr(model, 'version')
                          else None)
@@ -155,7 +151,7 @@ def model_url(model, version=None, pinned=False, endpoint=None, **kwargs):
         if issubclass(model_class, Entry):
             if version is not None:
                 args['version'] = version
-            elif pinned or (latest_id is not None and latest_id != model.id):
+            elif pinned or not is_latest(model):
                 args['version'] = model_version
 
         # Determine endpoint to use
@@ -857,11 +853,14 @@ class EntryView(ResourceView):
             if version is None:
                 entry = model.get(
                     (model.id == entry_id) &
-                    (model.id == model.latest)
+                    (model.latest == None)
                 )
             else:
-                entry = model.get((model.latest == entry_id) &
-                                  (model.version == version))
+                entry = model.get(
+                    (model.version == version) &
+                    ((model.latest == entry_id) |
+                     (model.latest == None))
+                )
         except DoesNotExist:
             return None
 
@@ -882,15 +881,16 @@ class EntryView(ResourceView):
 
         """
         model = cls.model
-        constraints = (model.id == model.latest)
+        constraints = (model.latest == None)
 
         # Only return published entries, and those belonging to the current
         # user, unless the user has permission to view unpublished ones.
         if not ViewUnpublishedPermission.can():
-            constraints = constraints & (
-                (model.published == True) |
-                (model.author == current_user.id)
-            )
+            published_or_owned = (model.published == True)
+            if not current_user.is_anonymous:
+                published_or_owned = (published_or_owned |
+                                      (model.author == current_user.id))
+            constraints = constraints & published_or_owned
 
         return model.select().where(constraints)
 
@@ -1299,9 +1299,57 @@ def default_context():
 
 
 @site.route('/clone')
+@auth_required('token', 'session', 'basic')
 def clone_entry():
-    """Create a clone of an Entry."""
-    pass
+    """Create a clone of an Entry.
+
+    Takes a single query parameter 'entry' that is the uri of the entry to be
+    cloned. Creates a new entry that is almost identical to the original (does
+    not have the same id, or associated signatures or version history) in the
+    database.
+
+    On success returns the uri of the new entry, or for an HTML request
+    redirects to the edit page for the newly created entry.
+
+    """
+    # Ensure the uri is a valid entry identifier, and retrieve the entry
+    # instance.
+    uri = request.args.get('entry')
+    entry = get_models_for_url(uri)
+    if not entry:
+        abort(404)
+    elif not isinstance(entry, Entry):
+        return 'URI ({}) does not identify a unique entry.'.format(uri), 400
+
+    # Clone the entry, and return new entry on success.
+    try:
+        # Create the clone instance
+        clone = clone_model(entry)
+
+        # Reset the version info and metadata
+        clone.author = current_user.id
+        clone.created_at = datetime.now()
+        clone.latest = None
+        clone.version = 1
+        clone.save()
+    except Exception as ex:
+        result = dict(message='Failed to clone entry: {}'.format(str(ex)),
+                      category='error')
+    else:
+        result = dict(message='Successfully cloned entry.',
+                      category='info',
+                      uri=model_url(clone))
+
+    best = best_mimetype('application/json', 'text/html')
+    if best == 'text/html':
+        flash(result['message'], result['category'])
+        return redirect(edit_url(clone, url=result['uri']))
+    else:
+        response = jsonify(result)
+        if result['category'] == 'error':
+            response.status_code = 500
+        return response
+
 
 @site.route('/')
 def index():
