@@ -1,10 +1,8 @@
 <div class="list-group">
-  {% if entries %}
-  {% for entry in entries %}
+  {% for entry in entries or [] %}
   <a href="{{ model_url(entry) }}" class="list-group-item">
     <h4 class="list-group-item-heading">{% if include_type %}{{ entry_type(entry) }}: {% endif %}{{ entry.name }}</h4>
     <p class="list-group-item-text">{{ entry.description|truncate(250)|striptags }}</p>
   </a>
   {% endfor %}
-  {% endif %}
 </div>
