@@ -1,25 +1,28 @@
+from datetime import datetime, date, time
 from flask import (Blueprint, request, render_template, url_for,
-                   jsonify, make_response, abort)
+                   jsonify, make_response, abort, redirect, flash)
 from flask.json import JSONEncoder
 from flask.views import MethodView
 from flask_security import current_user
 from flask_security.decorators import auth_required, roles_accepted
-from markdown import markdown
 from functools import wraps
-from app import app
-from models import db, Toolbox, Entry, Problem, Solution, text_search, \
-    is_latest, User, \
-    License, BaseModel, Role, Dependency, Signature, PublicKey, \
-    ProblemSignature, ToolboxSignature, SolutionSignature
-import requests
-from security import is_admin
-from signatures import verify_signature
-from namespaces import PROV
-from werkzeug.exceptions import NotAcceptable
+from markdown import markdown
 from peewee import SelectQuery, DoesNotExist
 from rdflib import BNode, URIRef
 from rdflib.namespace import RDF
-from datetime import datetime, date, time, timedelta
+from urllib.parse import parse_qs, urlparse
+from werkzeug.exceptions import NotAcceptable
+from werkzeug.routing import RequestRedirect, MethodNotAllowed, NotFound
+
+from app import app
+from models import db, Toolbox, Entry, Problem, Solution, text_search, \
+    is_latest, User, clone_model, \
+    License, BaseModel, Role, Dependency, Signature, PublicKey, \
+    ProblemSignature, ToolboxSignature, SolutionSignature
+from security import is_admin, EditEntryPermission, PublishEntryPermission, \
+    ViewUnpublishedPermission
+from signatures import verify_signature
+from namespaces import PROV
 
 site = Blueprint('site', __name__, template_folder='templates')
 
@@ -84,6 +87,38 @@ _jsonld_context = {
 }
 
 
+boolean_true_strings = frozenset({
+    'yes',
+    'true',
+    '1',
+    'y',
+    't'
+})
+
+boolean_false_strings = frozenset({
+    'no',
+    'false',
+    '0',
+    'n',
+    'f'
+})
+
+
+def parse_boolean_param(value):
+    """Parse query parameter value as a boolean."""
+    if value is not None:
+        if isinstance(value, str):
+            if value in boolean_true_strings:
+                return True
+            elif value in boolean_false_strings:
+                return False
+        else:
+            return bool(value)
+
+    # Could not determine a boolean value.
+    return None
+
+
 def model_endpoint(model_class):
     return 'site.{}'.format(_model_api[model_class][0])
 
@@ -105,22 +140,18 @@ def model_url(model, version=None, pinned=False, endpoint=None, **kwargs):
 
     """
     if model and type(model) in _model_api:
-        model_id = (model.entry_id
-                    if hasattr(model, 'entry_id')
-                    else model.id)
-        if not hasattr(model, 'latest') or model.latest is None:
-            latest_id = None
-        else:
-            latest_id = model.latest.id
+        pk_id = (model.entry_id
+                 if hasattr(model, 'entry_id')
+                 else model.id)
         model_class = type(model)
         model_version = (model.version if hasattr(model, 'version')
                          else None)
-        args = {model_pk(model_class): model_id}
+        args = {model_pk(model_class): pk_id}
         # Is it an Entry?
         if issubclass(model_class, Entry):
             if version is not None:
                 args['version'] = version
-            elif pinned or (latest_id is not None and latest_id != model_id):
+            elif pinned or not is_latest(model):
                 args['version'] = model_version
 
         # Determine endpoint to use
@@ -160,6 +191,14 @@ def edit_url(entry, url=None):
                        _external=True,
                        id=entry.id,
                        url=url)
+
+
+def publish_url(entry):
+    """Return the URL for publishing entry."""
+    if entry:
+        return url_for("site.publish_entry",
+                       _external=True,
+                       entry=model_url(entry))
 
 
 # These fields should *never* be returned to clients
@@ -364,11 +403,18 @@ def entry_type(entry):
     return type(entry).__name__
 
 
+def can_publish(entry):
+    """Return True if the current user can publish entry."""
+    return PublishEntryPermission(entry.id).can()
+
+
 @site.context_processor
 def entry_processor():
     return dict(entry_type=entry_type,
                 model_url=model_url,
-                edit_url=edit_url)
+                edit_url=edit_url,
+                publish_url=publish_url,
+                can_publish=can_publish)
 
 
 def add_context(response, context=_jsonld_context, embed=True):
@@ -628,6 +674,54 @@ class ResourceView(MethodView):
                            .format(key, type(resource).__name__))
 
 
+def get_view_func(url, method='GET'):
+    """Return the view function and arguments matching url, or None."""
+    adapter = app.url_map.bind(app.config['SERVER_NAME'])
+
+    try:
+        match = adapter.match(url, method=method)
+    except RequestRedirect as e:
+        # Recursively match redirects
+        return get_view_func(e.new_url, method)
+    except (MethodNotAllowed, NotFound):
+        # no match
+        return None
+
+    try:
+        # return the view function and arguments
+        return app.view_functions[match[0]], match[1]
+    except KeyError:
+        # No view is associated with the endpoint
+        return None
+
+
+def get_models_for_url(url, method='GET'):
+    """Return the model(s) identified by url, or None.
+
+    Match url to a view function, then call the corresponding getter on the
+    view class with the url and query parameters.
+
+    """
+    # Parse url to extract the path and query components.
+    parsed_url = urlparse(url)
+    # Strip singleton query param values out of the lists that parse_qs returns
+    # them in, e.g. {'foo': ['bar']} => {'foo': 'bar'}.
+    query = {k: v[0] if len(v) == 1 else v
+             for k, v in parse_qs(parsed_url.query).items()}
+
+    # Look for view function matching url path
+    match = get_view_func(parsed_url.path, method=method)
+    if not match:
+        return None
+    view_func, view_args = match
+
+    # Merge any query params with view_args
+    query.update(view_args)
+
+    # Find the view class and call the model lookup function for view_func.
+    return view_func.view_class.get_models(**query)
+
+
 class EntryView(ResourceView):
     detail_template = 'entries/detail.html'
     model = None
@@ -643,12 +737,9 @@ class EntryView(ResourceView):
                     key: [model_to_dict(entry) for entry in entries]
                 })
             elif best == "text/html":
-                if entries:
-                    entries_url = url_for(model_endpoint(type(entries[0])),
-                                          _external=True,
-                                          mimetype='application/json')
-                else:
-                    entries_url = None
+                entries_url = url_for(model_endpoint(self.model),
+                                      _external=True,
+                                      mimetype='application/json')
                 return render_template(
                     'entries/list.html',
                     entry_type=pluralise(self.model.__name__),
@@ -660,9 +751,8 @@ class EntryView(ResourceView):
                 pass
         else:
             version = request.args.get('version')
-            try:
-                entry = self.get_one(entry_id, version)
-            except:
+            entry = self.get_one(entry_id, version)
+            if not entry:
                 abort(404)
             if request.url.endswith('/prov'):
                 return self.prov_view(entry)
@@ -700,10 +790,44 @@ class EntryView(ResourceView):
             resp.location = model_url(entry)
             return resp
 
+    @auth_required('token', 'session', 'basic')
+    @roles_accepted('user', 'moderator', 'admin')
+    def patch(self, entry_id):
+        """Update a single entry."""
+        # Check entry is valid
+        version = request.args.get('version')
+        entry = self.get_one(entry_id, version=version)
+        if not entry:
+            abort(404)
+
+        # Ensure the user has the correct permissions for the current configuration
+        if not PublishEntryPermission(entry_id).can():
+            abort(403)
+
+        # Get the request payload
+        data = request.get_json()
+        if not data:
+            return 'No JSON content found in request.', 400, None
+
+        # Support updating published field only for now
+        if len(data) != 1 or 'published' not in data:
+            return 'The "published" field is the only one that can be updated using PATCH on an entry.', 400, None
+
+        # Update the entry
+        published = parse_boolean_param(data.get('published'))
+        if published is not None:
+            entry.published = published
+            entry.save()
+            return jsonldify(model_to_dict(entry))
+
+        # Failed to update
+        abort(422)
+
     def delete(self, entry_id):
         """Delete an entry."""
         id = None
-        entry = self.query(entry_id)
+        version = request.args.get('version')
+        entry = self.get_one(entry_id, version=version)
         if entry:
             id = entry.id
             entry.delete()
@@ -715,7 +839,8 @@ class EntryView(ResourceView):
         return dict(entry=entry,
                     entry_type=type(entry).__name__)
 
-    def get_one(self, entry_id, version=None):
+    @classmethod
+    def get_one(cls, entry_id, version=None, **kwargs):
         """Query model for the entry with id and optionally a version.
 
         If a version is specified, return the corresponding entry. If no
@@ -723,18 +848,61 @@ class EntryView(ResourceView):
         latest version*.
 
         """
-        if version is None:
-            entry = self.model.get((self.model.id == entry_id))
-            if entry and not is_latest(entry):
-                raise DoesNotExist
-        else:
-            entry = self.model.get((self.model.latest == entry_id) &
-                                   (self.model.version == version))
+        model = cls.model
+        try:
+            if version is None:
+                entry = model.get(
+                    (model.id == entry_id) &
+                    (model.latest == None)
+                )
+            else:
+                entry = model.get(
+                    (model.version == version) &
+                    ((model.latest == entry_id) |
+                     (model.latest == None))
+                )
+        except DoesNotExist:
+            return None
+
+        if entry and not entry.published:
+            if (current_user.is_anonymous or
+                (entry.author.id != current_user.id and
+                 not ViewUnpublishedPermission.can())):
+
+                return None
+
         return entry
 
-    def get_list(self):
-        """Return a list of latest entries for this model."""
-        return self.model.select().where(self.model.id == self.model.latest)
+    @classmethod
+    def get_list(cls, **kwargs):
+        """Return a list of latest entries for this model.
+
+        Does not include unpublished entries unless the current user has
+        permission to view unpublished entries, or they belong to the current
+        user.
+
+        """
+        model = cls.model
+        constraints = (model.latest == None)
+
+        # Only return published entries, and those belonging to the current
+        # user, unless the user has permission to view unpublished ones.
+        if not ViewUnpublishedPermission.can():
+            published_or_owned = (model.published == True)
+            if not current_user.is_anonymous:
+                published_or_owned = (published_or_owned |
+                                      (model.author == current_user.id))
+            constraints = constraints & published_or_owned
+
+        return model.select().where(constraints)
+
+    @classmethod
+    def get_models(cls, entry_id=None, **kwargs):
+        """Return the model(s) for entry_id and version."""
+        if id is None:
+            return cls.get_list(**kwargs)
+        else:
+            return cls.get_one(entry_id, **kwargs)
 
 
 class ProblemView(EntryView):
@@ -916,19 +1084,11 @@ class LicenseView(ResourceView):
             return jsonldify(model_to_dict(license))
 
 
-_signature_relations = {
-    'sssc:Problem': (ProblemSignature, 'problem'),
-    'sssc:Toolbox': (ToolboxSignature, 'toolbox'),
-    'sssc:Solution': (SolutionSignature, 'solution')
-}
-
-
-def signature_relation(entry_dict):
-    """Return the signature relation for entry and fk name."""
-    if entry_dict:
-        for t in entry_dict['@type']:
-            if t in _signature_relations:
-                return _signature_relations[t]
+def signature_relation(entry):
+    """Return the signature relation for entry and fk."""
+    fk = entry._meta.reverse_rel.get('signatures')
+    if fk:
+        return fk.model_class, fk.name
 
 
 class SignatureView(ResourceView):
@@ -960,8 +1120,8 @@ class SignatureView(ResourceView):
         if signed_string is None or signature is None or uri is None:
             return "Request parameter(s) missing", 400
         # Find the Entry to link it to
-        entry_dict = requests.get(uri, params=dict(_include_ids=True)).json()
-        if not entry_dict:
+        entry = get_models_for_url(uri)
+        if not entry:
             return "Entry for signature could not be found", 404
 
         sig_fields = signed_string.split('$')
@@ -980,7 +1140,8 @@ class SignatureView(ResourceView):
         entry_hash = sig_fields[0]
 
         # Make sure their hash is the same as our hash for the requested entry.
-        if entry_hash != entry_dict['entry_hash']:
+        # if entry_hash != entry_dict['entry_hash']:
+        if entry_hash != entry.entry_hash:
             return "Client hash does not match saved hash.", 400
         # Verify the signature using the user's current public key
         public_key = current_user.public_key
@@ -988,7 +1149,7 @@ class SignatureView(ResourceView):
                                                 signed_string,
                                                 public_key.key)
         if verified:
-            rel_class, rel_field = signature_relation(entry_dict)
+            rel_class, rel_field = signature_relation(entry)
             if rel_class:
                 sig_instance = Signature(signature=signature,
                                          public_key=public_key,
@@ -998,7 +1159,7 @@ class SignatureView(ResourceView):
                 sig_instance.save()
                 # Link signature to entry
                 rel = rel_class(signature=sig_instance)
-                setattr(rel, rel_field, entry_dict['id'])
+                setattr(rel, rel_field, entry.id)
                 rel.save()
                 url = model_url(sig_instance)
                 resp = make_response(url, 201)
@@ -1029,12 +1190,15 @@ class SignatureView(ResourceView):
 # Dispatch to json/html views
 def register_api(model, view, endpoint, url, pk='id', pk_type='int'):
     """Register the rules for a model api."""
+    # Store model-to-endpoint mappings for later lookup
     if isinstance(model, list):
         models = model
     else:
         models = [model]
     for m in models:
         _model_api[m] = (endpoint, url, pk, pk_type)
+
+    # Create standard REST endpoints
     view_func = view.as_view(endpoint)
     site.add_url_rule(url, defaults={pk: None},
                       view_func=view_func, methods=['GET'])
@@ -1043,6 +1207,8 @@ def register_api(model, view, endpoint, url, pk='id', pk_type='int'):
                       view_func=view_func, methods=['GET', 'PATCH', 'DELETE'])
     site.add_url_rule('{}<{}:{}>/<{}:{}>'.format(url, pk_type, pk, 'string', 'prop'),
                       view_func=view_func, methods=['PUT'])
+
+    # Prov endpoint
     prov_view_func = view.as_view(endpoint + '_prov')
     site.add_url_rule('{}<{}:{}>/prov'.format(url, pk_type, pk),
                       view_func=prov_view_func, methods=['GET'])
@@ -1060,6 +1226,7 @@ register_api([ProblemSignature, ToolboxSignature, SolutionSignature, Signature],
 @roles_accepted('admin', 'user')
 @site.route('/edit/users/<int:user_id>')
 def edit_user(user_id):
+    """Editable user profile."""
     user = User.get(User.id == user_id)
     if not user:
         abort(404)
@@ -1068,6 +1235,50 @@ def edit_user(user_id):
         abort(403)
 
     return render_template('edit_user_profile.html', user=user)
+
+
+@site.route('/publish', methods=['GET'])
+@auth_required('token', 'session', 'basic')
+def publish_entry():
+    """Publish an entry identified by uri.
+
+    If the entry has already been published, do nothing but succeed.
+
+    If it was a JSON request, return the entry data on success.
+
+    For an HTML request redirect to the entry info page, with a success or
+    error flash message as appropriate.
+
+    """
+    # Ensure the uri is a valid entry identifier, and retrieve the entry
+    # instance.
+    uri = request.args.get('entry')
+    entry = get_models_for_url(uri)
+    if not entry:
+        abort(404)
+    elif not isinstance(entry, Entry):
+        return 'URI ({}) does not identify a unique entry.'.format(uri), 400
+
+    # Make sure we have permission to publish the entry.
+    if not PublishEntryPermission(entry.id).can():
+        abort(403)
+
+    # Publish the entry (if required), and return the current status of the
+    # entry.
+    try:
+        if not entry.published:
+            entry.published = True
+            entry.save()
+    except Exception as ex:
+        flash('Failed to publish entry: {}'.format(str(ex)), 'error')
+    else:
+        flash('Entry was published successfully.')
+
+    best = best_mimetype('application/json', 'text/html')
+    if best == 'text/html':
+        return redirect(model_url(entry))
+    else:
+        return jsonify(model_to_dict(entry))
 
 
 @site.route('/search')
@@ -1087,6 +1298,59 @@ def search():
 @site.route('/sssc.jsonld')
 def default_context():
     return jsonldify({}, True)
+
+
+@site.route('/clone')
+@auth_required('token', 'session', 'basic')
+def clone_entry():
+    """Create a clone of an Entry.
+
+    Takes a single query parameter 'entry' that is the uri of the entry to be
+    cloned. Creates a new entry that is almost identical to the original (does
+    not have the same id, or associated signatures or version history) in the
+    database.
+
+    On success returns the uri of the new entry, or for an HTML request
+    redirects to the edit page for the newly created entry.
+
+    """
+    # Ensure the uri is a valid entry identifier, and retrieve the entry
+    # instance.
+    uri = request.args.get('entry')
+    entry = get_models_for_url(uri)
+    if not entry:
+        abort(404)
+    elif not isinstance(entry, Entry):
+        return 'URI ({}) does not identify a unique entry.'.format(uri), 400
+
+    # Clone the entry, and return new entry on success.
+    try:
+        # Create the clone instance
+        clone = clone_model(entry)
+
+        # Reset the version info and metadata
+        clone.author = current_user.id
+        clone.created_at = datetime.now()
+        clone.latest = None
+        clone.version = 1
+        clone.save()
+    except Exception as ex:
+        result = dict(message='Failed to clone entry: {}'.format(str(ex)),
+                      category='error')
+    else:
+        result = dict(message='Successfully cloned entry.',
+                      category='info',
+                      uri=model_url(clone))
+
+    best = best_mimetype('application/json', 'text/html')
+    if best == 'text/html':
+        flash(result['message'], result['category'])
+        return redirect(edit_url(clone, url=result['uri']))
+    else:
+        response = jsonify(result)
+        if result['category'] == 'error':
+            response.status_code = 500
+        return response
 
 
 @site.route('/')

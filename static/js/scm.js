@@ -54,3 +54,12 @@ function show_solution_template(template) {
 function show_toolbox_template(url) {
   show_code(url, ".template-source", "ruby");
 }
+
+/**
+ * Confirm publish actions before continuing.
+ */
+$(function() {
+  $('.confirm-publish').click(function() {
+    return confirm('Are you sure you want to publish this entry?');
+  });
+});

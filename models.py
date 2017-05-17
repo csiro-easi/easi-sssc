@@ -63,6 +63,16 @@ def text_search(text):
     return matches
 
 
+_rels_ignored_for_cloning = frozenset({
+    'versions',
+    'problemindex_set',
+    'solutionindex_set',
+    'toolboxindex_set',
+    'signatures',
+    'solutions'
+})
+
+
 def clone_model(model):
     """Create and return a clone of model.
 
@@ -70,18 +80,25 @@ def clone_model(model):
     (Vars, Deps etc).
 
     """
-    # Copy current data
+    # Copy current data and clean the primary key and creation time so new ones
+    # are assigned.
     data = dict(model._data)
-    # clear the primary key
     data.pop(model._meta.primary_key.name)
+
     # Create the new entry
     # TODO handle unique id/entry combo!
     copy = type(model).create(**data)
-    # Update references in copied relations to point to the clone
-    for n, f in copy._meta.reverse_rel.items():
-        for x in getattr(copy, n):
-            setattr(x, f.name, copy)
-    copy.save()
+
+    # Copy all child instances and point the copies at the clone.
+    for rel_name, fk_field in model._meta.reverse_rel.items():
+        # Ignore known relations.
+        if rel_name not in _rels_ignored_for_cloning:
+            for rel_instance in getattr(model, rel_name):
+                child = clone_model(rel_instance)
+                setattr(child, fk_field.name, copy)
+                child.save()
+
+    # Return the copy
     return copy
 
 
@@ -95,7 +112,12 @@ def user_entries(user):
 
 
 def is_latest(entry):
-    """Return True if entry is the latest version."""
+    """Return True if entry is the latest version.
+
+    Latest field should be NULL for the latest version, but old instances might
+    have the latest field set to their own id instead, so check for that.
+
+    """
     return entry.latest is None or entry.latest.id == entry.id
 
 
@@ -249,7 +271,8 @@ class Entry(BaseModel):
     created_at -- Datetime this Entry was added to the catalogue
     author -- Who created this Entry
     version -- Version number for this Entry
-    keywords -- Space separated list of keywords describing this Entry
+    entry_hash -- Auto-generated hash of entry content
+    published -- Flag indicating visibility status
 
     """
     id = PrimaryKeyField()
@@ -258,12 +281,18 @@ class Entry(BaseModel):
     created_at = DateTimeField(default=datetime.now)
     version = IntegerField(default=1)
     entry_hash = CharField(null=True)
+    published = BooleanField(default=app.config['PUBLISH_DEFAULT'])
 
-    entry_id = property(lambda self: self.latest.id
-                        if self.latest is not None
-                        else None)
+    entry_id = property(
+        lambda self: self.id if self.latest is None else self.latest.id
+    )
 
     _semantic_types = [PROV.Entity]
+
+    # Fields that do not cause a version change when they are changed.
+    _ignored_dirty_fields = frozenset({
+        'published'
+    })
 
     def check_resources(self, resources=None):
         """Check any resources, update any that have changed.
@@ -302,14 +331,23 @@ class Entry(BaseModel):
                 checks.add_check(rfield, url, is_changed, errors)
         return checks
 
-    def update_metadata(self, is_created=False):
-        """Update metadata for this model, including versioning and authorship.
+    def is_version_bump_required(self):
+        """Return True if a new version of this entry must be created.
+
+        Depends on checking for dirty fields for pending changes to this model,
+        so must be called before the model is saved.
 
         """
-        # If we have no id, or is_created = True, just set the author.
+        return not self._dirty.issubset(self._ignored_dirty_fields)
+
+    def update_metadata(self, is_created=False):
+        """Update metadata for a new entry.
+
+        """
+        # If it's a new entry, just set the author.
         if is_created or self.id is None:
             self.author = current_user.id
-        else:
+        elif self.is_version_bump_required():
             # Find the old state of entry in the db
             E = self._meta.model_class
             old_entry = E.get(E.id == self.id)
@@ -406,6 +444,7 @@ class Image(BaseModel):
     image_id -- Identifier for this image
     """
     provider = CharField()
+    
     image_id = CharField()
 
 

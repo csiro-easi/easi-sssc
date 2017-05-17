@@ -1,5 +1,6 @@
 # Basic auth
 :example-auth := (format "Basic %s" (base64-encode-string (format "%s:%s" "geoffrey.squire@csiro.au" "foobar")))
+:alt-auth := (format "Basic %s" (base64-encode-string (format "%s:%s" "geoffrey.squire@gmail.com" "foobar")))
 
 # Get all problems
 GET http://localhost:5000/problems/
@@ -14,8 +15,8 @@ Content-Type: application/json
 
 {
   "entry_id": "http://localhost:5000/problems/1",
-  "entry_hash": "e6fdeefcf067fd5031ccf7b1a48256b95e5196f865c8550d0c4c349a5f38cfa8",
-  "signature": "3ec558e14a9c07125efb6293afd8485c9ac512324743619931d764d4b5e05e6cdf24edb0bb97699a4278f43758e08b6281fd7b6d6e0cc89db8ce86c8cd4bf5c7985594a4a5b4906d62a290f8ed7362009a4696cc30796b5019f488f0981147e9b81ca6bc8e80b91bd4e814cf8bfef2983de23e64fb192c0542a9a833123bfadb3820816d9edb77d5a41bff48a84bd84c21403c212f126e01d03eda965b661a83e7234f7902b5397affb3076c070080c0037a42ab599f436e8ff4a1db2ad8ad0deec2159d2102eab485d56bc7e8f28c5b8dbba069143900aa22ae1591e72f4ed3dc14e43166949c29a2cb6061d24906f7a4882196c3f6eeaaf47006505f4ad592"
+  "entry_hash": "ac9b434408d6b191445bee649ec250009569301313e0fdefca785016cc2509dd",
+  "signature": "4c4407ccb079d95ae84a5c0afb80f0e5de7620ed3526e4f00df970224fc6dc34d6efb3b3a387b9fd41934cd3dbc8322cc40aa05ac7da451595e4098ec3cec5b2d8689ed6399909ec97c55e9bd753d91616b99e67c5cea895bdb6740b70c99240651de7fbe75400d2ee5f771a47e8fc8682fa147076a39e8e3260d58a33725f3f82d89cb025488f9062fbd42fb44bb9c786ab6a90940f4e9b5d7de483723645e5d7fa29a92dfd03036a315a05bfe77767cabff43a11b97cc58fc051552faed05127d8d48a6288d39cbed945a53a991c3d5a431c6d1015d17af08ba4cab53cb5b5a20635bb3b3e5429c88a95dc2ff6c44732178ff2230bb8c04a0412e5722333f5"
 }
 
 # Signatures
@@ -76,3 +77,12 @@ Content-Type: text/plain
 
 # Can we still get prov?
 GET http://localhost:5000/users/1/prov
+
+# Update a problem
+PATCH http://localhost:5000/problems/1
+Authorization: :example-auth
+Content-Type: application/merge-patch+json
+
+{
+  "published": "true"
+}

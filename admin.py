@@ -1,22 +1,21 @@
-from flask import abort, redirect, request, url_for, flash
-from flask_admin import Admin, helpers as admin_helpers, expose
+from flask import abort, flash, redirect, request, url_for
+from flask_admin import Admin, helpers as admin_helpers
+from flask_admin.actions import action
+from flask_admin.babel import gettext, ngettext
 from flask_admin.contrib.peewee import ModelView
 from flask_admin.contrib.peewee.form import CustomModelConverter
-from flask_admin.form import BaseForm, rules
-from flask_admin.model.form import InlineFormAdmin
+from flask_admin.form import BaseForm
 from flask_security import current_user
-import requests
 from wtforms import fields
-from wtforms.widgets import TextArea
 from app import app
 from security import security, is_admin, is_user
 from models import Problem, Solution, Toolbox, User, UserRoles, \
     SolutionDependency, ToolboxDependency, \
     SolutionImage, ToolboxImage, \
     SolutionVar, ToolboxVar, JsonField, Entry, \
-    ProblemTag, ToolboxTag, SolutionTag, PublicKey
+    ProblemTag, ToolboxTag, SolutionTag
 from signatures import hash_entry
-from views import model_url
+from views import jsonldify, model_to_dict
 
 admin = Admin(app, template_mode='bootstrap3')
 
@@ -83,60 +82,6 @@ class UserAdmin(ProtectedModelView):
         return is_admin()
 
 
-class PublicKeyInlineAdmin(InlineFormAdmin):
-    form_excluded_columns = ['registered_at']
-    form_rules = ['key']
-    form_widget_args = {
-        'key': {
-            'rows': 5,
-            'cols': 100,
-            'style': 'width: auto;'
-        }
-    }
-
-
-class PublicKeyWidget(TextArea):
-    def __init__(self, **kwargs):
-        self.widget_overrides = dict(kwargs)
-        super().__init__()
-
-    def __call__(self, field, **kwargs):
-        for k, v in self.widget_overrides.items():
-            kwargs[k] = v
-        return super().__call__(field, **kwargs)
-
-
-class UserProfile(ProtectedModelView):
-    can_create = False
-    can_delete = False
-    edit_template = 'admin/user_edit.html'
-
-    form_rules = (
-        rules.FieldSet(('name', 'email'), 'Details'),
-    )
-    # inline_models = [
-    #     (PublicKey, dict(
-    #         form_excluded_columns=['registered_at'],
-    #         form_args={
-    #             'key': {
-    #                 'widget': PublicKeyWidget(
-    #                     rows=5,
-    #                     cols=100,
-    #                     style='width: auto'
-    #                 )
-    #             }
-    #         }
-    #     ))
-    # ]
-    # inline_models = [PublicKeyInlineAdmin(PublicKey)]
-
-    @expose('/')
-    def index_view(self):
-        """Users can't list or view others' profiles, so redirect list view."""
-        return redirect(self.get_url('.edit_view') +
-                        '?id={}'.format(current_user.id))
-
-
 class EntryModelView(ProtectedModelView):
     """View for administering all Entries.
 
@@ -147,13 +92,21 @@ class EntryModelView(ProtectedModelView):
     TODO: Decide on whether/how to limit deletion
 
     """
-    form_excluded_columns = ['author',
-                             'latest',
-                             'version',
-                             'created_at',
-                             'entry_hash']
-    column_editable_list = ['name', 'description']
     can_view_details = True
+    column_editable_list = ['name', 'description']
+    column_filters = ['name', 'published', 'created_at']
+    column_list = ['name', 'description', 'author', 'version', 'created_at', 'published']
+    column_sortable_list = ['author', 'published', 'created_at']
+    create_modal = True
+    details_modal = False
+    edit_modal = True
+    form_excluded_columns = [
+        'author',
+        'latest',
+        'version',
+        'created_at',
+        'entry_hash'
+    ] + (['published'] if not app.config['PUBLISH_OWN'] else [])
 
     # If user does not have the 'admin' role, only allow them to administer
     # their own views.
@@ -166,7 +119,7 @@ class EntryModelView(ProtectedModelView):
             query = query.where(self.model.author == current_user.id)
 
         # Do not allow changing history - hide old versions of entries.
-        query = query.where(self.model.latest == self.model.id)
+        query = query.where(self.model.latest == None)
 
         return query
 
@@ -183,8 +136,9 @@ class EntryModelView(ProtectedModelView):
 
     def on_model_change(self, form, model, is_created=False):
         """Maintain model metadata."""
-        # Update model metadata
+        # Update metadata
         model.update_metadata(is_created)
+
         # Check external resources
         checks = model.check_resources()
         if not checks.succeeded():
@@ -193,17 +147,66 @@ class EntryModelView(ProtectedModelView):
                     flash('{}: {}'.format(type(e), e))
 
     def after_model_change(self, form, model, is_created=False):
-        """Update 'latest' links and entry hashes."""
-        model.latest = model.id
-        model.save()
+        """Update entry hashes once we have an id."""
         # Hash updated content and store result with model
         if isinstance(model, Entry):
-            entry_json = requests.get(model_url(model)).text
+            r = jsonldify(model_to_dict(model))
+            entry_json = r.data.decode()
             model.entry_hash = hash_entry(
                 entry_json,
                 hash_alg=app.config['ENTRY_HASH_FUNCTION']
             )
-        model.save()
+            model.save()
+
+    @action("publish", "Publish",
+            "Are you sure you want to publish the selected entries?")
+    def action_publish(self, ids):
+        try:
+            query = self.model.select().where(self.model.id.in_(ids))
+
+            count = 0
+            for instance in query:
+                if not instance.published:
+                    instance.published = True
+                    instance.save()
+                    count += 1
+
+            flash(ngettext('Entry was successfully published.',
+                           '%(count)s entries were successfully published.',
+                           count,
+                           count=count))
+        except Exception as ex:
+            if not self.handle_view_exception(ex):
+                raise
+            flash(
+                gettext('Failed to publish entries. %(error)s', error=str(ex)),
+                'error'
+            )
+
+    @action("unpublish", "Unpublish",
+            "Are you sure you want to unpublish the selected entries?")
+    def action_unpublish(self, ids):
+        try:
+            query = self.model.select().where(self.model.id.in_(ids))
+
+            count = 0
+            for instance in query:
+                if instance.published:
+                    instance.published = False
+                    instance.save()
+                    count += 1
+
+            flash(ngettext('Entry was successfully unpublished.',
+                           '%(count)s entries were successfully unpublished.',
+                           count,
+                           count=count))
+        except Exception as ex:
+            if not self.handle_view_exception(ex):
+                raise
+            flash(
+                gettext('Failed to unpublish entries. %(error)s', error=str(ex)),
+                'error'
+            )
 
 
 class ProblemAdmin(EntryModelView):
