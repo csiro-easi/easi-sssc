@@ -864,10 +864,12 @@ class EntryView(ResourceView):
         except DoesNotExist:
             return None
 
-        if (not entry.published and
-            (entry.author.id != current_user.id and
-             not ViewUnpublishedPermission.can())):
-            return None
+        if entry and not entry.published:
+            if (current_user.is_anonymous or
+                (entry.author.id != current_user.id and
+                 not ViewUnpublishedPermission.can())):
+
+                return None
 
         return entry
 

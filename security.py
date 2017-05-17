@@ -123,23 +123,26 @@ def on_identity_loaded(sender, identity):
     # set the identity user object
     identity.user = current_user
 
-    # Add the UserNeed
-    identity.provides.add(UserNeed(current_user.id))
+    # Catch anonymous user logged in
+    if not current_user.is_anonymous:
 
-    # Update with roles the user provides
-    for role in current_user.roles:
-        identity.provides.add(RoleNeed(role.name))
+        # Add the UserNeed
+        identity.provides.add(UserNeed(current_user.id))
 
-    entries = list(current_user.entries)
+        # Update with roles the user provides
+        for role in current_user.roles:
+            identity.provides.add(RoleNeed(role.name))
 
-    # Allow a user to edit their own entries
-    for entry in entries:
-        identity.provides.add(EditEntryNeed(entry.id))
+        entries = list(current_user.entries)
 
-    # If PUBLISH_OWN is True then give user publishing permission
-    if app.config['PUBLISH_OWN']:
+        # Allow a user to edit their own entries
         for entry in entries:
-            identity.provides.add(PublishEntryNeed(entry.id))
+            identity.provides.add(EditEntryNeed(entry.id))
+
+        # If PUBLISH_OWN is True then give user publishing permission
+        if app.config['PUBLISH_OWN']:
+            for entry in entries:
+                identity.provides.add(PublishEntryNeed(entry.id))
 
 
 def is_admin(user=None):

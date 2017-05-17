@@ -1,12 +1,11 @@
 from flask import abort, flash, redirect, request, url_for
-from flask_admin import Admin, helpers as admin_helpers, expose
+from flask_admin import Admin, helpers as admin_helpers
 from flask_admin.actions import action
 from flask_admin.babel import gettext, ngettext
 from flask_admin.contrib.peewee import ModelView
 from flask_admin.contrib.peewee.form import CustomModelConverter
 from flask_admin.form import BaseForm
 from flask_security import current_user
-import requests
 from wtforms import fields
 from app import app
 from security import security, is_admin, is_user
@@ -16,7 +15,7 @@ from models import Problem, Solution, Toolbox, User, UserRoles, \
     SolutionVar, ToolboxVar, JsonField, Entry, \
     ProblemTag, ToolboxTag, SolutionTag
 from signatures import hash_entry
-from views import model_url
+from views import jsonldify, model_to_dict
 
 admin = Admin(app, template_mode='bootstrap3')
 
@@ -101,12 +100,13 @@ class EntryModelView(ProtectedModelView):
     create_modal = True
     details_modal = False
     edit_modal = True
-    form_excluded_columns = ['author',
-                             'latest',
-                             'version',
-                             'created_at',
-                             'entry_hash',
-                             'published']
+    form_excluded_columns = [
+        'author',
+        'latest',
+        'version',
+        'created_at',
+        'entry_hash'
+    ] + (['published'] if not app.config['PUBLISH_OWN'] else [])
 
     # If user does not have the 'admin' role, only allow them to administer
     # their own views.
@@ -150,13 +150,8 @@ class EntryModelView(ProtectedModelView):
         """Update entry hashes once we have an id."""
         # Hash updated content and store result with model
         if isinstance(model, Entry):
-            url = model_url(model)
-            r = requests.get(url)
-            if r.status_code != 200:
-                flash('Failed to retrieve json for hashing entry: ' + url)
-                return
-
-            entry_json = r.text
+            r = jsonldify(model_to_dict(model))
+            entry_json = r.data.decode()
             model.entry_hash = hash_entry(
                 entry_json,
                 hash_alg=app.config['ENTRY_HASH_FUNCTION']
