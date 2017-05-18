@@ -8,7 +8,7 @@ from flask_admin.form import BaseForm
 from flask_security import current_user
 from wtforms import fields
 from app import app
-from security import security, is_admin, is_user
+from security import security, is_admin, is_user, PublishEntryPermission
 from models import Problem, Solution, Toolbox, User, UserRoles, \
     SolutionDependency, ToolboxDependency, \
     SolutionImage, ToolboxImage, \
@@ -105,8 +105,9 @@ class EntryModelView(ProtectedModelView):
         'latest',
         'version',
         'created_at',
-        'entry_hash'
-    ] + (['published'] if not app.config['PUBLISH_OWN'] else [])
+        'entry_hash',
+        'published'
+    ]
 
     # If user does not have the 'admin' role, only allow them to administer
     # their own views.
@@ -165,16 +166,31 @@ class EntryModelView(ProtectedModelView):
             query = self.model.select().where(self.model.id.in_(ids))
 
             count = 0
+            denied = 0
             for instance in query:
                 if not instance.published:
-                    instance.published = True
-                    instance.save()
-                    count += 1
+                    if PublishEntryPermission(instance.id).can():
+                        instance.published = True
+                        instance.save()
+                        count += 1
+                    else:
+                        denied += 1
 
-            flash(ngettext('Entry was successfully published.',
-                           '%(count)s entries were successfully published.',
-                           count,
-                           count=count))
+            if count > 0:
+                flash(ngettext(
+                    'Entry was successfully published.',
+                    '%(count)s entries were successfully published.',
+                    count,
+                    count=count))
+            else:
+                flash('No entries were published.')
+
+            if denied > 0:
+                flash(ngettext(
+                    'Permission to publish was denied.',
+                    'Permission to publish %(denied)s entries was denied.',
+                    denied,
+                    denied=denied), 'error')
         except Exception as ex:
             if not self.handle_view_exception(ex):
                 raise
@@ -190,16 +206,31 @@ class EntryModelView(ProtectedModelView):
             query = self.model.select().where(self.model.id.in_(ids))
 
             count = 0
+            denied = 0
             for instance in query:
                 if instance.published:
-                    instance.published = False
-                    instance.save()
-                    count += 1
+                    if PublishEntryPermission(instance.id).can():
+                        instance.published = False
+                        instance.save()
+                        count += 1
+                    else:
+                        denied += 1
 
-            flash(ngettext('Entry was successfully unpublished.',
-                           '%(count)s entries were successfully unpublished.',
-                           count,
-                           count=count))
+            if count > 0:
+                flash(ngettext(
+                    'Entry was successfully unpublished.',
+                    '%(count)s entries were successfully unpublished.',
+                    count,
+                    count=count))
+            else:
+                flash('No entries were unpublished.')
+
+            if denied > 0:
+                flash(ngettext(
+                    'Permission to unpublish was denied.',
+                    'Permission to unpublish %(denied)s entries was denied.',
+                    denied,
+                    denied=denied), 'error')
         except Exception as ex:
             if not self.handle_view_exception(ex):
                 raise
