@@ -23,7 +23,6 @@ DEPENDENCY_TYPES = (('puppet', 'Puppet module from forge-style repository'),
                     ('requirements',
                      'Requirements file with python packages from pypi'),
                     ('python', 'Python package from pypi'),
-                    ('hpc', 'HPC style module for Raijin and similar systems'),
                     ('toolbox',
                      'A Toolbox in this, or another, solution centre'))
 
