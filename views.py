@@ -304,7 +304,6 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
 
     # Include exposed fields for the api
     for k, v in get_exposed(model, parent_handler=model_url).items():
-        print('exposed(', k, ',', v, ')')
         if isinstance(v, BaseModel):
             v = model_to_dict(v,
                               seen=seen,

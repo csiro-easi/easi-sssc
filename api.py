@@ -60,7 +60,6 @@ def get_exposed(x, handler=None, **kwargs):
         if apiname:
             value = getattr(x, xname)
             sense = getattr(a, '_api_sense', None)
-            print(apiname, 'has value', value, 'and sense', sense)
             if sense:
                 handler = kwargs.get('{}_handler'.format(sense))
             else:
