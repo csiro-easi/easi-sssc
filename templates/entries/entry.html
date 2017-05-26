@@ -8,9 +8,13 @@
       <!-- </h3> -->
       <div class="btn-toolbar pull-right">
         <div class="btn-group">
+
           {% if not entry.published and can_publish(entry) %}
-          <a class="btn btn-link btn-xs confirm-publish" role="button" href="{{publish_url(entry)}}">Publish</a>
+          <a class="btn btn-link btn-xs confirm-publish" role="button" href="{{action_url('publish', entry)}}">Publish</a>
           {% endif %}
+
+          <a class="btn btn-link btn-xs" role="button" href="{{action_url('review', entry)}}">Review</a>
+
           {% if entry.author.id == current_user.id %}
           {% if entry.latest is none %}
           <a class="btn btn-link btn-xs" role="button" href="{{ edit_url(entry, url=request.full_path) }}">Edit</a>
@@ -18,6 +22,7 @@
           <a class="btn btn-link btn-xs disabled" role="button" href="#">Edit</a>
           {% endif %}
           {% endif %}
+
           <a class="btn btn-link btn-xs" role="button" href="{{ url_for('site.clone_entry', entry=url) }}">Clone</a>
         </div>
 
