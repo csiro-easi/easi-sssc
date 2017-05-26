@@ -1418,8 +1418,10 @@ def review_entry():
         best = best_mimetype('application/json', 'text/html')
         if best == 'text/html':
             if not errors:
+                flash('Review added successfully')
                 return redirect(model_url(entry))
             else:
+                flash('Please fix the issue(s) with your review submission and try again.', 'error')
                 return render_template('entries/review.html',
                                        entry=entry,
                                        data=data,
