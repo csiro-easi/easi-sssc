@@ -1,0 +1,34 @@
+<div class="panel panel-default">
+  <div class="panel-heading">
+    <h3 class="panel-title">Reviews</h3>
+  </div>
+
+  <table class="table">
+    <tr>
+      <th>Rating</th>
+      <th>Comment</th>
+      <th>Reviewer</th>
+      <th>Date</th>
+    </tr>
+
+    {% for review in entry.reviews %}
+    <tr>
+      <td>
+        {% if review.rating > 0 %}
+        <span class="glyphicon glyphicon-thumbs-up"></span>
+        {% elif review.rating < 0 %}
+        <span class="glyphicon glyphicon-thumbs-down"></span>
+        {% endif %}
+      </td>
+
+      <td title="{{review.comment}}">{{ review.comment|truncate(30) }}</td>
+
+      <td>
+        <a href="{{ model_url(review.reviewer) }}">{{ review.reviewer.name }}</a>
+      </td>
+
+      <td>{{ review.created_at }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>

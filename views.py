@@ -422,8 +422,8 @@ def entry_type(entry):
 
 
 def parse_review_request(request):
-    """Parse review data in request and return a new Review instance."""
-    review = None
+    """Parse review data in request and return data and any errors."""
+    errors = None
 
     # Extract the data from json or a form
     if request.is_json:
@@ -432,21 +432,21 @@ def parse_review_request(request):
         form = request.form
         data = dict()
         if 'comment' in form:
-            data['comment'] = form['comment']
+            data['comment'] = form['comment'].strip()
         if 'rating' in form:
             data['rating'] = int(form['rating'])
 
     # Make sure we have the required fields
-    if 'comment' not in data and 'rating' not in data:
-        raise BadRequest('Review submission requires at least a comment or rating.')
+    if not data.get('comment') and not data.get('rating'):
+        errors = dict(
+            rating='Review submission requires at least a comment or rating.',
+            comment='Review submission requires at least a comment or rating.'
+        )
 
-    # Create and return the review instance.
-    review = Review(**data)
-    review.reviewer = current_user.id
-    return review
+    return data, errors
 
 
-def save_review(review, entry):
+def save_review(data, entry):
     """Save review instance and associate it with entry."""
     rel = None
 
@@ -461,15 +461,15 @@ def save_review(review, entry):
                 .format(rel_class_name)
             )
 
-        # Save review instance first to get an id.
-        review.save()
+        # Create and return the review instance.
+        review = Review.create(reviewer=current_user.id, **data)
 
         # Associate review with entry
         rel = rel_class.create(review=review, entry=entry)
     except Exception as ex:
         raise InternalServerError('Failed to save review: {}'.format(str(ex)))
 
-    return rel
+    return review
 
 
 @app.template_filter('markdown')
@@ -1403,19 +1403,34 @@ def review_entry():
     # Dispatch on request type
     if request.method == 'GET':
         # Return the review form
-        return render_template('entries/review.html', entry=entry)
+        return render_template('entries/review.html',
+                               entry=entry,
+                               data={},
+                               errors={})
     else:
         # Parse and save the review.
-        review = parse_review_request(request)
-        save_review(review, entry)
+        data, errors = parse_review_request(request)
+        if not errors:
+            save_review(data, entry)
 
         # Redirect to the entry page or return the updated entry as
         # appropriate.
         best = best_mimetype('application/json', 'text/html')
         if best == 'text/html':
-            return redirect(model_url(entry))
+            if not errors:
+                return redirect(model_url(entry))
+            else:
+                return render_template('entries/review.html',
+                                       entry=entry,
+                                       data=data,
+                                       errors=errors)
         else:
-            return jsonify(model_to_dict(entry))
+            if not errors:
+                return jsonify(model_to_dict(entry))
+            else:
+                resp = jsonify(errors)
+                resp.status_code = 400
+                return resp
 
 
 @site.route('/search')
