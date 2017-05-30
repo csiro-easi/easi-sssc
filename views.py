@@ -1397,7 +1397,7 @@ def review_entry():
     # review a published entry, but only certain users can review an
     # unpublished entry.
     if (is_unpublished(entry) and
-        not ViewUnpublishedPermission(entry.id).can()):
+        not ViewUnpublishedPermission.can()):
         abort(403)
 
     # Dispatch on request type
