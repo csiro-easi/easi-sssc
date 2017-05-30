@@ -299,7 +299,7 @@ class Entry(BaseModel):
     @property
     def reviews(self):
         """Return reviews for this Entry."""
-        query = None
+        query = []
         if (hasattr(self, 'problemreview_set') and
             self.problemreview_set.count() > 0):
             query = self.problemreview_set
@@ -309,8 +309,7 @@ class Entry(BaseModel):
         elif (hasattr(self, 'solutionreview_set') and
               self.solutionreview_set.count() > 0):
             query = self.solutionreview_set
-        if query:
-            return [rel.review for rel in query]
+        return [rel.review for rel in query]
 
     _semantic_types = [PROV.Entity]
 
