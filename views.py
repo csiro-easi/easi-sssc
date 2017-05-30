@@ -11,15 +11,17 @@ from peewee import SelectQuery, DoesNotExist
 from rdflib import BNode, URIRef
 from rdflib.namespace import RDF
 from urllib.parse import parse_qs, urlparse
-from werkzeug.exceptions import NotAcceptable
+from werkzeug.exceptions import BadRequest, InternalServerError, NotAcceptable
 from werkzeug.routing import RequestRedirect, MethodNotAllowed, NotFound
 
+from api import get_exposed
 from app import app
+import models
 from models import db, Toolbox, Entry, Problem, Solution, text_search, \
-    is_latest, User, clone_model, \
+    is_latest, is_unpublished, User, clone_model, \
     License, BaseModel, Role, Dependency, Signature, PublicKey, \
-    ProblemSignature, ToolboxSignature, SolutionSignature
-from security import is_admin, EditEntryPermission, PublishEntryPermission, \
+    ProblemSignature, ToolboxSignature, SolutionSignature, Review
+from security import is_admin, PublishEntryPermission, \
     ViewUnpublishedPermission
 from signatures import verify_signature
 from namespaces import PROV
@@ -193,12 +195,11 @@ def edit_url(entry, url=None):
                        url=url)
 
 
-def publish_url(entry):
-    """Return the URL for publishing entry."""
-    if entry:
-        return url_for("site.publish_entry",
-                       _external=True,
-                       entry=model_url(entry))
+def action_url(action, entry):
+    """Return the URL for action on entry."""
+    if entry and action:
+        endpoint = "site.{}_entry".format(action)
+        return url_for(endpoint, _external=True, entry=model_url(entry))
 
 
 # These fields should *never* be returned to clients
@@ -209,7 +210,13 @@ _hidden_fields = set([
     Toolbox.toolboxindex_set,
     Signature.problemsignature_set,
     Signature.toolboxsignature_set,
-    Signature.solutionsignature_set
+    Signature.solutionsignature_set,
+    Review.problemreview_set,
+    Review.toolboxreview_set,
+    Review.solutionreview_set,
+    Problem.problemreview_set,
+    Toolbox.toolboxreview_set,
+    Solution.solutionreview_set
 ])
 
 _internal_identifiers = set([
@@ -294,6 +301,29 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
         data['@type'] = sorted(t.n3(g.namespace_manager)
                                for t in g.objects(subject=subject,
                                                   predicate=RDF.type))
+
+    # Include exposed fields for the api
+    for k, v in get_exposed(model, parent_handler=model_url).items():
+        if isinstance(v, BaseModel):
+            v = model_to_dict(v,
+                              seen=seen,
+                              exclude=exclude,
+                              extra=extra,
+                              refs=refs,
+                              max_depth=max_depth - 1,
+                              include_nulls=include_nulls,
+                              include_ids=include_ids)
+        elif isinstance(v, list) or isinstance(v, tuple):
+            v = [model_to_dict(x,
+                               seen=seen,
+                               exclude=exclude,
+                               extra=extra,
+                               refs=refs,
+                               max_depth=max_depth - 1,
+                               include_nulls=include_nulls,
+                               include_ids=include_ids)
+                 for x in v]
+        data[k] = v
 
     # Iterate over fields of model
     foreign = set(model._meta.rel.values())
@@ -387,6 +417,61 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
     return data
 
 
+def entry_type(entry):
+    return type(entry).__name__
+
+
+def parse_review_request(request):
+    """Parse review data in request and return data and any errors."""
+    errors = None
+
+    # Extract the data from json or a form
+    if request.is_json:
+        data = request.get_json()
+    else:
+        form = request.form
+        data = dict()
+        if 'comment' in form:
+            data['comment'] = form['comment'].strip()
+        if 'rating' in form:
+            data['rating'] = int(form['rating'])
+
+    # Make sure we have the required fields
+    if not data.get('comment') and not data.get('rating'):
+        errors = dict(
+            rating='Review submission requires at least a comment or rating.',
+            comment='Review submission requires at least a comment or rating.'
+        )
+
+    return data, errors
+
+
+def save_review(data, entry):
+    """Save review instance and associate it with entry."""
+    rel = None
+
+    # Create a new <Entry>Review instance
+    rel_class_name = "{}Review".format(entry_type(entry))
+    try:
+        # Make sure we have the rel class
+        rel_class = getattr(models, rel_class_name)
+        if not rel_class:
+            raise ValueError(
+                '{} is not a valid entry-review relation class name.'
+                .format(rel_class_name)
+            )
+
+        # Create and return the review instance.
+        review = Review.create(reviewer=current_user.id, **data)
+
+        # Associate review with entry
+        rel = rel_class.create(review=review, entry=entry)
+    except Exception as ex:
+        raise InternalServerError('Failed to save review: {}'.format(str(ex)))
+
+    return review
+
+
 @app.template_filter('markdown')
 def markdown_filter(md):
     return markdown(md)
@@ -399,10 +484,6 @@ def latest_only(entries):
         return filter(is_latest, entries)
 
 
-def entry_type(entry):
-    return type(entry).__name__
-
-
 def can_publish(entry):
     """Return True if the current user can publish entry."""
     return PublishEntryPermission(entry.id).can()
@@ -413,7 +494,7 @@ def entry_processor():
     return dict(entry_type=entry_type,
                 model_url=model_url,
                 edit_url=edit_url,
-                publish_url=publish_url,
+                action_url=action_url,
                 can_publish=can_publish)
 
 
@@ -559,6 +640,60 @@ def best_mimetype(*mimetypes, default=None, request_obj=None):
     return best
 
 
+def get_view_func(url, method='GET'):
+    """Return the view function and arguments matching url, or None."""
+    adapter = app.url_map.bind(app.config['SERVER_NAME'])
+
+    try:
+        match = adapter.match(url, method=method)
+    except RequestRedirect as e:
+        # Recursively match redirects
+        return get_view_func(e.new_url, method)
+    except (MethodNotAllowed, NotFound):
+        # no match
+        return None
+
+    try:
+        # return the view function and arguments
+        return app.view_functions[match[0]], match[1]
+    except KeyError:
+        # No view is associated with the endpoint
+        return None
+
+
+def get_models_for_url(url, method='GET'):
+    """Return the model(s) identified by url, or None.
+
+    Match url to a view function, then call the corresponding getter on the
+    view class with the url and query parameters.
+
+    """
+    # Parse url to extract the path and query components.
+    parsed_url = urlparse(url)
+    # Strip singleton query param values out of the lists that parse_qs returns
+    # them in, e.g. {'foo': ['bar']} => {'foo': 'bar'}.
+    query = {k: v[0] if len(v) == 1 else v
+             for k, v in parse_qs(parsed_url.query).items()}
+
+    # Look for view function matching url path
+    match = get_view_func(parsed_url.path, method=method)
+    if not match:
+        return None
+    view_func, view_args = match
+
+    # Merge any query params with view_args
+    query.update(view_args)
+
+    # Find the view class and call the model lookup function for view_func.
+    return view_func.view_class.get_models(**query)
+
+
+# ======================================================================
+#
+# Resources API
+#
+# ======================================================================
+
 class ResourceView(MethodView):
     prov_context = {
         "Entity": "http://www.w3.org/ns/prov#Entity",
@@ -672,54 +807,6 @@ class ResourceView(MethodView):
         else:
             raise KeyError('Unknown field "{}" in {} API.'
                            .format(key, type(resource).__name__))
-
-
-def get_view_func(url, method='GET'):
-    """Return the view function and arguments matching url, or None."""
-    adapter = app.url_map.bind(app.config['SERVER_NAME'])
-
-    try:
-        match = adapter.match(url, method=method)
-    except RequestRedirect as e:
-        # Recursively match redirects
-        return get_view_func(e.new_url, method)
-    except (MethodNotAllowed, NotFound):
-        # no match
-        return None
-
-    try:
-        # return the view function and arguments
-        return app.view_functions[match[0]], match[1]
-    except KeyError:
-        # No view is associated with the endpoint
-        return None
-
-
-def get_models_for_url(url, method='GET'):
-    """Return the model(s) identified by url, or None.
-
-    Match url to a view function, then call the corresponding getter on the
-    view class with the url and query parameters.
-
-    """
-    # Parse url to extract the path and query components.
-    parsed_url = urlparse(url)
-    # Strip singleton query param values out of the lists that parse_qs returns
-    # them in, e.g. {'foo': ['bar']} => {'foo': 'bar'}.
-    query = {k: v[0] if len(v) == 1 else v
-             for k, v in parse_qs(parsed_url.query).items()}
-
-    # Look for view function matching url path
-    match = get_view_func(parsed_url.path, method=method)
-    if not match:
-        return None
-    view_func, view_args = match
-
-    # Merge any query params with view_args
-    query.update(view_args)
-
-    # Find the view class and call the model lookup function for view_func.
-    return view_func.view_class.get_models(**query)
 
 
 class EntryView(ResourceView):
@@ -1223,6 +1310,12 @@ register_api([ProblemSignature, ToolboxSignature, SolutionSignature, Signature],
              SignatureView, 'signature_api', '/signatures/', pk='signature_id')
 
 
+# ======================================================================
+#
+# Actions API
+#
+# ======================================================================
+
 @roles_accepted('admin', 'user')
 @site.route('/edit/users/<int:user_id>')
 def edit_user(user_id):
@@ -1279,6 +1372,67 @@ def publish_entry():
         return redirect(model_url(entry))
     else:
         return jsonify(model_to_dict(entry))
+
+
+@site.route('/review', methods=['GET', 'POST'])
+@auth_required('token', 'session', 'basic')
+def review_entry():
+    """Review an entry.
+
+    Takes a single query parameter 'entry' that is the URI for the entry to be
+    reviewed.
+
+    On GET, return the review submission page. On POST, submit a new review of
+    entry.
+
+    """
+    uri = request.args.get('entry')
+    entry = get_models_for_url(uri)
+    if not entry:
+        abort(404)
+    elif not isinstance(entry, Entry):
+        return "URI ({}) does not identify a unique entry.".format(uri), 400
+
+    # Make sure we have permission to review the entry. Any registered user can
+    # review a published entry, but only certain users can review an
+    # unpublished entry.
+    if (is_unpublished(entry) and
+        not ViewUnpublishedPermission.can()):
+        abort(403)
+
+    # Dispatch on request type
+    if request.method == 'GET':
+        # Return the review form
+        return render_template('entries/review.html',
+                               entry=entry,
+                               data={},
+                               errors={})
+    else:
+        # Parse and save the review.
+        data, errors = parse_review_request(request)
+        if not errors:
+            save_review(data, entry)
+
+        # Redirect to the entry page or return the updated entry as
+        # appropriate.
+        best = best_mimetype('application/json', 'text/html')
+        if best == 'text/html':
+            if not errors:
+                flash('Review added successfully')
+                return redirect(model_url(entry))
+            else:
+                flash('Please fix the issue(s) with your review submission and try again.', 'error')
+                return render_template('entries/review.html',
+                                       entry=entry,
+                                       data=data,
+                                       errors=errors)
+        else:
+            if not errors:
+                return jsonify(model_to_dict(entry))
+            else:
+                resp = jsonify(errors)
+                resp.status_code = 400
+                return resp
 
 
 @site.route('/search')

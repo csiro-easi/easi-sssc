@@ -1,4 +1,5 @@
 from datetime import datetime
+from functools import partial
 import hashlib
 import importlib
 import requests
@@ -11,6 +12,7 @@ from peewee import BooleanField, CharField, DateTimeField, \
 from playhouse.sqlite_ext import FTSModel, SqliteExtDatabase
 from flask_security import UserMixin, RoleMixin, current_user
 from rdflib.namespace import RDF
+import api
 from app import app
 from namespaces import PROV, SSSC, rdf_graph
 
@@ -120,6 +122,12 @@ def is_latest(entry):
     return entry.latest is None or entry.latest.id == entry.id
 
 
+def is_unpublished(entry):
+    """Return True if entry is unpublished."""
+    if entry:
+        return not entry.published
+
+
 class BaseModel(Model):
     """Base of all application models.
 
@@ -173,6 +181,7 @@ class User(BaseModel, UserMixin):
     _semantic_types = [PROV.Agent, PROV.Person]
 
     def _get_public_key(self):
+        """Return the current (most recent) public key."""
         try:
             return self.public_keys.order_by(
                 PublicKey.registered_at.desc()
@@ -285,6 +294,23 @@ class Entry(BaseModel):
     entry_id = property(
         lambda self: self.id if self.latest is None else self.latest.id
     )
+
+    @api.expose(sense='child')
+    @property
+    def reviews(self):
+        """Return reviews for this Entry."""
+        query = None
+        if (hasattr(self, 'problemreview_set') and
+            self.problemreview_set.count() > 0):
+            query = self.problemreview_set
+        elif (hasattr(self, 'toolboxreview_set') and
+              self.toolboxreview_set.count() > 0):
+            query = self.toolboxreview_set
+        elif (hasattr(self, 'solutionreview_set') and
+              self.solutionreview_set.count() > 0):
+            query = self.solutionreview_set
+        if query:
+            return [rel.review for rel in query]
 
     _semantic_types = [PROV.Entity]
 
@@ -588,6 +614,95 @@ class ToolboxVar(Var):
     toolbox = ForeignKeyField(Toolbox, related_name="variables")
 
 
+class Review(BaseModel):
+    """Review of an Entry."""
+    reviewer = ForeignKeyField(User, related_name="reviews")
+    comment = TextField()
+    rating = IntegerField(default=0)
+    created_at = DateTimeField(default=datetime.now)
+
+    @property
+    @api.expose(sense='parent')
+    def entry(self):
+        """Return the entry this review is for."""
+        rel = None
+        if self.problemreview_set.count() > 0:
+            rel = self.problemreview_set.get()
+        elif self.toolboxreview_set.count() > 0:
+            rel = self.toolboxreview_set.get()
+        elif self.solutionreview_set.count() > 0:
+            rel = self.solutionreview_set.get()
+        if rel:
+            return rel.entry
+        return None
+
+
+def get_through_model(model):
+    """Return the through model for model."""
+    if model:
+        return getattr(model, '_through_model', None)
+
+
+def get_through_instance(model):
+    """Return the through instance for model.
+
+    Return None if model is not an instance of a through relation.
+
+    """
+    through_model = get_through_model(model)
+    if through_model:
+        # Find the fk field in cls to the through model.
+        through_field = model._meta.rel_for_model(through_model).name
+        # Retrieve the through model instance.
+        return getattr(model, through_field)
+
+
+def get_through_field(model, field):
+    """Return the value for field from through model of model."""
+    through_instance = get_through_instance(model)
+    if through_instance:
+        return getattr(through_instance, field)
+
+
+def through_model(model_class):
+    """Wrapper for a through relation class providing property accessors."""
+    def wrapper(cls):
+        # Add the through model class as a field
+        cls._through_model = model_class
+
+        # Provide convenience properties to access through model fields where
+        # they don't clash with the fields of cls.
+        cls_dir = dir(cls)
+        for f in model_class._meta.fields:
+            if f not in cls_dir:
+                setattr(cls, f, property(partial(get_through_field, field=f)))
+        return cls
+    return wrapper
+
+
+def is_through_model(cls):
+    """Return True if cls is a through model relation."""
+    return get_through_model(cls)
+
+
+@through_model(Review)
+class ProblemReview(BaseModel):
+    review = ForeignKeyField(Review, primary_key=True)
+    entry = ForeignKeyField(Problem)
+
+
+@through_model(Review)
+class ToolboxReview(BaseModel):
+    review = ForeignKeyField(Review, primary_key=True)
+    entry = ForeignKeyField(Toolbox)
+
+
+@through_model(Review)
+class SolutionReview(BaseModel):
+    review = ForeignKeyField(Review, primary_key=True)
+    entry = ForeignKeyField(Solution)
+
+
 class BaseIndexModel(FTSModel):
     name = TextField()
     description = TextField()
@@ -627,7 +742,8 @@ _TABLES = [User, Role, UserRoles, License, Problem, Toolbox, Signature,
            ToolboxDependency, Solution, SolutionDependency, PublicKey,
            ToolboxVar, SolutionVar, Source, SolutionImage,
            ToolboxImage, ProblemSignature, ToolboxSignature, SolutionSignature,
-           ProblemTag, ToolboxTag, SolutionTag]
+           ProblemTag, ToolboxTag, SolutionTag,
+           Review, ProblemReview, SolutionReview, ToolboxReview]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 
 

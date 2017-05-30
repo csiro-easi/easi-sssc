@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block page_header %}
+<h2>Review</h2>
+{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ action_url('review', entry) }}">
+  {% with error = errors.get('rating') %}
+  <div class="form-group{% if error %} has-error{% endif %}">
+    <label for="rating">Rating</label>
+    <div id="rating">
+      <div class="btn-group" data-toggle="buttons">
+        <label class="btn btn-success{% if data.get('rating', 0) > 0 %} active{% endif %}">
+          <input type="radio" name="rating" autocomplete="off" value="1" {% if data.get('rating', 0) > 0 %}checked{% endif %}>
+          <span class="glyphicon glyphicon-thumbs-up"></span>
+        </label>
+        <label class="btn btn-default{% if data.get('rating', 0) == 0 %} active{% endif %}">
+          <input type="radio" name="rating" autocomplete="off" value="0" {% if data.get('rating', 0) == 0 %}checked{% endif %}>
+          None
+        </label>
+        <label class="btn btn-danger{% if data.get('rating', 0) < 0 %} active{% endif %}">
+          <input type="radio" name="rating" autocomplete="off" value="-1" {% if data.get('rating', 0) < 0 %}checked{% endif %}>
+          <span class="glyphicon glyphicon-thumbs-down"></span>
+        </label>
+      </div>
+    </div>
+
+    {% if error %}
+    <span class="help-block">{{ error }}</span>
+    {% endif %}
+  </div>
+  {% endwith %}
+
+  {% with error = errors.get('comment') %}
+  <div class="form-group{% if error %} has-error{% endif %}">
+    <label for="comment">Comment</label>
+    <textarea id="comment" name="comment" class="form-control" rows="5"{% if data.get('comment') %} value="{{ data.get('comment') }}"{% endif %}></textarea>
+    {% if error %}
+    <span class="help-block">{{ error }}</span>
+    {% endif %}
+  </div>
+  {% endwith %}
+
+  <button type="submit" class="btn btn-default">Submit</button>
+  <button class="btn btn-default" onclick="window.history.back();">Cancel</button>
+</form>
+{% endblock %}
+
+{% block js_footer %}
+{% endblock %}
