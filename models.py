@@ -300,11 +300,14 @@ class Entry(BaseModel):
     def reviews(self):
         """Return reviews for this Entry."""
         query = None
-        if self.problemreview_set.count() > 0:
+        if (hasattr(self, 'problemreview_set') and
+            self.problemreview_set.count() > 0):
             query = self.problemreview_set
-        elif self.toolboxreview_set.count() > 0:
+        elif (hasattr(self, 'toolboxreview_set') and
+              self.toolboxreview_set.count() > 0):
             query = self.toolboxreview_set
-        elif self.solutionreview_set.count() > 0:
+        elif (hasattr(self, 'solutionreview_set') and
+              self.solutionreview_set.count() > 0):
             query = self.solutionreview_set
         if query:
             return [rel.review for rel in query]
