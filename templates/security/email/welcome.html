@@ -1,0 +1,10 @@
+<p>Dear {{ user.email }}!</p>
+
+<p>Welcome to the Scientific Software Solution Centre!</p>
+
+{% if security.confirmable %}
+<p>Before you can start using your account we require that you verify your email
+through the link below:</p>
+
+<p><a href="{{ confirmation_link }}">Confirm my account</a></p>
+{% endif %}

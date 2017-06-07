@@ -1,0 +1,12 @@
+Dear {{ user.email }},
+
+Welcome to the Scientific Software Solution Centre!
+
+{% if security.confirmable %}
+
+Before you can start using your account we require that you verify your email
+through the link below:
+
+{{ confirmation_link }}
+
+{% endif %}
