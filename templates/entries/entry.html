@@ -23,6 +23,10 @@
           {% endif %}
           {% endif %}
 
+          {% if entry.author.id == current_user.id %}
+          <a class="btn btn-link btn-xs" role="button" href="{{ url_for('site.attach_files', entry=model_url(entry)) }}">Attach</a>
+          {% endif %}
+
           <a class="btn btn-link btn-xs" role="button" href="{{ url_for('site.clone_entry', entry=url) }}">Clone</a>
         </div>
 

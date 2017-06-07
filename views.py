@@ -15,12 +15,13 @@ from werkzeug.exceptions import BadRequest, InternalServerError, NotAcceptable
 from werkzeug.routing import RequestRedirect, MethodNotAllowed, NotFound
 
 from api import get_exposed
-from app import app
+from app import app, attachments
 import models
 from models import db, Toolbox, Entry, Problem, Solution, text_search, \
     is_latest, is_unpublished, User, clone_model, \
     License, BaseModel, Role, Dependency, Signature, PublicKey, \
-    ProblemSignature, ToolboxSignature, SolutionSignature, Review
+    ProblemSignature, ToolboxSignature, SolutionSignature, Review, \
+    UploadedResource, ProblemAttachment, ToolboxAttachment, SolutionAttachment
 from security import is_admin, PublishEntryPermission, \
     ViewUnpublishedPermission
 from signatures import verify_signature
@@ -202,6 +203,11 @@ def action_url(action, entry):
         return url_for(endpoint, _external=True, entry=model_url(entry))
 
 
+def file_url(attachment):
+    """Return the url for an attached file."""
+    return attachments.url(attachment.filename)
+
+
 # These fields should *never* be returned to clients
 _hidden_fields = set([
     User.password,
@@ -216,7 +222,10 @@ _hidden_fields = set([
     Review.solutionreview_set,
     Problem.problemreview_set,
     Toolbox.toolboxreview_set,
-    Solution.solutionreview_set
+    Solution.solutionreview_set,
+    UploadedResource.problemattachment_set,
+    UploadedResource.toolboxattachment_set,
+    UploadedResource.solutionattachment_set
 ])
 
 _internal_identifiers = set([
@@ -227,7 +236,8 @@ _internal_identifiers = set([
     Solution.id,
     License.id,
     Dependency.id,
-    PublicKey.id
+    PublicKey.id,
+    UploadedResource.id
 ])
 
 # These fields should usually be returned as refs, not nested
@@ -242,7 +252,8 @@ _default_refs = set([
     Solution.latest,
     Solution.problem,
     Solution.versions,
-    Solution.signatures
+    Solution.signatures,
+    UploadedResource.user
 ])
 
 # User details shouldn't be included in most client interactions.
@@ -495,6 +506,7 @@ def entry_processor():
                 model_url=model_url,
                 edit_url=edit_url,
                 action_url=action_url,
+                file_url=file_url,
                 can_publish=can_publish)
 
 
@@ -686,6 +698,22 @@ def get_models_for_url(url, method='GET'):
 
     # Find the view class and call the model lookup function for view_func.
     return view_func.view_class.get_models(**query)
+
+
+def ensure_entry(uri):
+    """Ensure uri identifies an existing entry, and return Entry.
+
+    Raise NotFound if no entry exists for uri.
+
+    """
+    entry = get_models_for_url(uri)
+    if entry:
+        if isinstance(entry, Entry):
+            return entry
+        else:
+            raise NotFound('URI does not identify a unique Entry ({})'
+                           .format(uri))
+    raise NotFound('Entry not found for uri ({})'.format(uri))
 
 
 # ======================================================================
@@ -1505,6 +1533,49 @@ def clone_entry():
         if result['category'] == 'error':
             response.status_code = 500
         return response
+
+
+@site.route('/attach', methods=['GET', 'POST'])
+@auth_required('token', 'session', 'basic')
+def attach_files():
+    """Upload attachment(s) for an entry.
+
+    Expects a single parameter 'entry' that is the uri of the entry to attach
+    the file(s) to.
+
+    On success, returns the url of the uploaded file, or redirects to the
+    attachments page for entry for an HTML request.
+
+    """
+    if request.method == 'POST' and 'file' in request.files:
+        entry = ensure_entry(request.form.get('entry'))
+        filestore = request.files['file']
+        filename = attachments.save(filestore)
+
+        # Use the original filename as the name for now
+        name = filestore.filename
+
+        # Create the upload object
+        attachment = UploadedResource(filename=filename,
+                                      name=name,
+                                      user=current_user.id)
+        attachment.save()
+        flash('Attachment saved as {}'.format(name))
+
+        # Store the association with entry.
+        rel_class_name = '{}Attachment'.format(entry_type(entry))
+        rel_class = getattr(models, rel_class_name)
+        rel = rel_class.create(attachment=attachment, entry=entry)
+
+        # Return or redirect as required
+        best = best_mimetype('application/json', 'text/html')
+        if best == 'text/html':
+            return redirect(model_url(entry))
+        else:
+            return jsonify(attachment=attachments.url(attachment.filename))
+    else:
+        entry = ensure_entry(request.args.get('entry'))
+        return render_template('attach.html', entry=entry)
 
 
 @site.route('/')

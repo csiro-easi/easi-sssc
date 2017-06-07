@@ -388,6 +388,14 @@ class Entry(BaseModel):
         return "entry ({})".format(self.name)
 
 
+class UploadedResource(BaseModel):
+    """Store, and serve, an uploaded file."""
+    filename = CharField()
+    name = CharField()
+    uploaded_at = DateTimeField(default=datetime.now)
+    user = ForeignKeyField(User, related_name="uploads")
+
+
 class Tag(BaseModel):
     tag = CharField()
 
@@ -702,6 +710,24 @@ class SolutionReview(BaseModel):
     entry = ForeignKeyField(Solution)
 
 
+@through_model(UploadedResource)
+class ProblemAttachment(BaseModel):
+    attachment = ForeignKeyField(UploadedResource, primary_key=True)
+    entry = ForeignKeyField(Problem, related_name="attachments")
+
+
+@through_model(UploadedResource)
+class ToolboxAttachment(BaseModel):
+    attachment = ForeignKeyField(UploadedResource, primary_key=True)
+    entry = ForeignKeyField(Toolbox, related_name="attachments")
+
+
+@through_model(UploadedResource)
+class SolutionAttachment(BaseModel):
+    attachment = ForeignKeyField(UploadedResource, primary_key=True)
+    entry = ForeignKeyField(Solution, related_name="attachments")
+
+
 class BaseIndexModel(FTSModel):
     name = TextField()
     description = TextField()
@@ -742,7 +768,9 @@ _TABLES = [User, Role, UserRoles, License, Problem, Toolbox, Signature,
            ToolboxVar, SolutionVar, Source, SolutionImage,
            ToolboxImage, ProblemSignature, ToolboxSignature, SolutionSignature,
            ProblemTag, ToolboxTag, SolutionTag,
-           Review, ProblemReview, SolutionReview, ToolboxReview]
+           Review, ProblemReview, SolutionReview, ToolboxReview,
+           UploadedResource, ProblemAttachment, ToolboxAttachment,
+           SolutionAttachment]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 
 
