@@ -1,6 +1,7 @@
 from datetime import datetime, date, time
 from flask import (Blueprint, request, render_template, url_for,
-                   jsonify, make_response, abort, redirect, flash)
+                   jsonify, make_response, abort, redirect, flash,
+                   send_from_directory)
 from flask.json import JSONEncoder
 from flask.views import MethodView
 from flask_security import current_user
@@ -11,21 +12,23 @@ from peewee import SelectQuery, DoesNotExist
 from rdflib import BNode, URIRef
 from rdflib.namespace import RDF
 from urllib.parse import parse_qs, urlparse
-from werkzeug.exceptions import BadRequest, InternalServerError, NotAcceptable
+from werkzeug.exceptions import InternalServerError, NotAcceptable
 from werkzeug.routing import RequestRedirect, MethodNotAllowed, NotFound
 
 from api import get_exposed
-from app import app, attachments
+from app import app
 import models
 from models import db, Toolbox, Entry, Problem, Solution, text_search, \
-    is_latest, is_unpublished, User, clone_model, \
+    is_latest, is_unpublished, User, clone_model, entry_type, \
     License, BaseModel, Role, Dependency, Signature, PublicKey, \
     ProblemSignature, ToolboxSignature, SolutionSignature, Review, \
-    UploadedResource, ProblemAttachment, ToolboxAttachment, SolutionAttachment
-from security import is_admin, PublishEntryPermission, \
+    UploadedResource, ProblemAttachment, ToolboxAttachment, SolutionAttachment, \
+    resource_attachment
+from namespaces import PROV
+from security import is_admin, EditEntryPermission, PublishEntryPermission, \
     ViewUnpublishedPermission
 from signatures import verify_signature
-from namespaces import PROV
+from uploads import allowed_file, save_attachment
 
 site = Blueprint('site', __name__, template_folder='templates')
 
@@ -205,7 +208,7 @@ def action_url(action, entry):
 
 def file_url(attachment):
     """Return the url for an attached file."""
-    return attachments.url(attachment.filename)
+    return url_for('site.get_uploaded', id=attachment.attachment.id)
 
 
 # These fields should *never* be returned to clients
@@ -225,7 +228,8 @@ _hidden_fields = set([
     Solution.solutionreview_set,
     UploadedResource.problemattachment_set,
     UploadedResource.toolboxattachment_set,
-    UploadedResource.solutionattachment_set
+    UploadedResource.solutionattachment_set,
+    UploadedResource.filename
 ])
 
 _internal_identifiers = set([
@@ -426,10 +430,6 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
                 data[prop] = value
 
     return data
-
-
-def entry_type(entry):
-    return type(entry).__name__
 
 
 def parse_review_request(request):
@@ -1547,36 +1547,56 @@ def attach_files():
     attachments page for entry for an HTML request.
 
     """
-    if request.method == 'POST' and 'file' in request.files:
+    if request.method == 'POST':
+        # Redirect to the attach form if no file attached.
+        if 'file' not in request.files:
+            flash('No file part')
+            return redirect(request.url)
+
         entry = ensure_entry(request.form.get('entry'))
-        filestore = request.files['file']
-        filename = attachments.save(filestore)
-
-        # Use the original filename as the name for now
-        name = filestore.filename
-
-        # Create the upload object
-        attachment = UploadedResource(filename=filename,
-                                      name=name,
-                                      user=current_user.id)
-        attachment.save()
-        flash('Attachment saved as {}'.format(name))
-
-        # Store the association with entry.
-        rel_class_name = '{}Attachment'.format(entry_type(entry))
-        rel_class = getattr(models, rel_class_name)
-        rel = rel_class.create(attachment=attachment, entry=entry)
+        file = request.files['file']
+        if not file or file.filename == '':
+            flash('No file selected')
+            return redirect(request.url)
+        if not allowed_file(file.filename):
+            flash('Selected file is not an allowed type.')
+            return redirect(request.url)
+        attachment = save_attachment(entry, file, current_user)
 
         # Return or redirect as required
         best = best_mimetype('application/json', 'text/html')
         if best == 'text/html':
             return redirect(model_url(entry))
         else:
-            return jsonify(attachment=attachments.url(attachment.filename))
+            return jsonify(model_to_dict(attachment))
     else:
         entry = ensure_entry(request.args.get('entry'))
         return render_template('attach.html', entry=entry)
 
+
+@site.route('/uploads/<id>', methods=['GET'])
+def get_uploaded(id):
+    """Return an uploaded resource.
+
+    If it's an attachment, ensure requester has permission to access it.
+
+    """
+    try:
+        resource = UploadedResource.get(UploadedResource.id == id)
+    except DoesNotExist:
+        abort(404)
+
+    attachment = resource_attachment(resource)
+    if attachment:
+        if not attachment.entry.published:
+            if not (ViewUnpublishedPermission.can() or
+                    EditEntryPermission(attachment.entry.id).can()):
+                abort(403)
+
+    return send_from_directory(app.config['UPLOADS_DEFAULT_DEST'],
+                               resource.filename,
+                               as_attachment=True,
+                               attachment_filename=attachment.name)
 
 @site.route('/')
 def index():

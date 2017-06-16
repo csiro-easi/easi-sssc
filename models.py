@@ -728,6 +728,22 @@ class SolutionAttachment(BaseModel):
     entry = ForeignKeyField(Solution, related_name="attachments")
 
 
+def resource_attachment(resource):
+    """If resource is an attachment, return the <X>Attachment instance."""
+    if resource and isinstance(resource, UploadedResource):
+        if resource.problemattachment_set.count() > 0:
+            return resource.problemattachment_set.get()
+        if resource.solutionattachment_set.count() > 0:
+            return resource.solutionattachment_set.get()
+        if resource.toolboxattachment_set.count() > 0:
+            return resource.toolboxattachment_set.get()
+
+
+def is_attachment(resource):
+    """Return True if resource is an attachment."""
+    return resource_attachment(resource) is not None
+
+
 class BaseIndexModel(FTSModel):
     name = TextField()
     description = TextField()
@@ -751,14 +767,18 @@ class ToolboxIndex(BaseIndexModel):
     toolbox = ForeignKeyField(Toolbox)
 
 
+def entry_type(entry):
+    return type(entry).__name__
+
+
 def index_entry(entry):
     """Add entry to the appropriate text index."""
-    entry_type = type(entry).__name__
+    et = entry_type(entry)
     cls = getattr(importlib.import_module(__name__),
-                  entry_type + 'Index')
+                  et + 'Index')
     if cls:
         obj = cls(name=entry.name, description=entry.description)
-        field = entry_type.lower()
+        field = et.lower()
         setattr(obj, field, entry)
         obj.save()
 
