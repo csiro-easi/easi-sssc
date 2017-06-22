@@ -97,9 +97,9 @@ class EntryModelView(ProtectedModelView):
     column_filters = ['name', 'published', 'created_at']
     column_list = ['name', 'description', 'author', 'version', 'created_at', 'published']
     column_sortable_list = ['author', 'published', 'created_at']
-    create_modal = True
-    details_modal = False
-    edit_modal = True
+    create_modal = False
+    details_modal = True
+    edit_modal = False
     form_excluded_columns = [
         'author',
         'latest',

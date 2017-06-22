@@ -393,6 +393,7 @@ class UploadedResource(BaseModel):
     filename = CharField()
     name = CharField()
     uploaded_at = DateTimeField(default=datetime.now)
+    published = BooleanField(default=app.config['PUBLISH_DEFAULT'])
     user = ForeignKeyField(User, related_name="uploads")
 
 
@@ -710,40 +711,6 @@ class SolutionReview(BaseModel):
     entry = ForeignKeyField(Solution)
 
 
-@through_model(UploadedResource)
-class ProblemAttachment(BaseModel):
-    attachment = ForeignKeyField(UploadedResource, primary_key=True)
-    entry = ForeignKeyField(Problem, related_name="attachments")
-
-
-@through_model(UploadedResource)
-class ToolboxAttachment(BaseModel):
-    attachment = ForeignKeyField(UploadedResource, primary_key=True)
-    entry = ForeignKeyField(Toolbox, related_name="attachments")
-
-
-@through_model(UploadedResource)
-class SolutionAttachment(BaseModel):
-    attachment = ForeignKeyField(UploadedResource, primary_key=True)
-    entry = ForeignKeyField(Solution, related_name="attachments")
-
-
-def resource_attachment(resource):
-    """If resource is an attachment, return the <X>Attachment instance."""
-    if resource and isinstance(resource, UploadedResource):
-        if resource.problemattachment_set.count() > 0:
-            return resource.problemattachment_set.get()
-        if resource.solutionattachment_set.count() > 0:
-            return resource.solutionattachment_set.get()
-        if resource.toolboxattachment_set.count() > 0:
-            return resource.toolboxattachment_set.get()
-
-
-def is_attachment(resource):
-    """Return True if resource is an attachment."""
-    return resource_attachment(resource) is not None
-
-
 class BaseIndexModel(FTSModel):
     name = TextField()
     description = TextField()
@@ -789,8 +756,7 @@ _TABLES = [User, Role, UserRoles, License, Problem, Toolbox, Signature,
            ToolboxImage, ProblemSignature, ToolboxSignature, SolutionSignature,
            ProblemTag, ToolboxTag, SolutionTag,
            Review, ProblemReview, SolutionReview, ToolboxReview,
-           UploadedResource, ProblemAttachment, ToolboxAttachment,
-           SolutionAttachment]
+           UploadedResource]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 
 

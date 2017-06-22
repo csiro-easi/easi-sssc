@@ -16,7 +16,7 @@ def allowed_file(filename):
     return suffix in allowed or suffix not in denied
 
 
-def save_attachment(entry, file, user, name=None):
+def save_attachment(user, file, name=None):
     """Save file as an attachment for entry, return the attachment model.
 
     Uses the basename of the file as the default name for the attachment,
@@ -31,19 +31,31 @@ def save_attachment(entry, file, user, name=None):
 
     # Create the upload object with the default filename first, so we can use
     # the id to ensure the final filename is unique.
-    attachment = models.UploadedResource.create(filename=filename,
+    upload = models.UploadedResource.create(filename=filename,
                                                 name=name,
                                                 user=user.id)
 
     # Append the resource id to the filename to ensure it is unique before
     # saving the file.
-    filename = filename.with_name(filename.name + '.' + str(attachment.id))
-    attachment.filename = filename
-    attachment.save()
+    filename = filename.with_name(filename.name + '.' + str(upload.id))
+    upload.filename = filename
+    upload.save()
     file.save(str(app.config['UPLOADS_DEFAULT_DEST'] / filename))
 
-    # Store the association with entry.
-    rel_class_name = '{}Attachment'.format(models.entry_type(entry))
-    rel_class = getattr(models, rel_class_name)
-    rel = rel_class.create(attachment=attachment, entry=entry)
-    return rel
+    return upload
+
+
+def delete_upload(upload, delete_published=False):
+    """Delete the upload."""
+    if upload:
+        if upload.published and not delete_published:
+            raise ValueError('Cannot delete published resource.')
+
+        # Delete the file itself
+        path = Path(app.config['UPLOADS_DEFAULT_DEST']) / Path(upload.filename)
+        if path.is_file():
+            path.unlink()
+
+        # Remove the database entry
+        upload.delete_instance()
+        

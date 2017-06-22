@@ -1,4 +1,5 @@
 from collections import namedtuple
+from flask import g
 from flask_principal import identity_loaded, Permission, RoleNeed, UserNeed
 from flask_security import PeeweeUserDatastore, Security, current_user, \
     RegisterForm, user_confirmed
@@ -23,11 +24,20 @@ security = Security(app, user_datastore, confirm_register_form=ScmRegisterForm)
 EntryNeed = namedtuple('entry', ['method', 'value'])
 EntryNeed.__doc__ = """Base type for needs to do with entries."""
 
+ResourceNeed = namedtuple('resource', ['method', 'value'])
+ResourceNeed.__doc__ = """Base type for needs to do with resources."""
+
 EditEntryNeed = partial(EntryNeed, 'edit')
 EditEntryNeed.__doc__ = """Needed to modify a specific entry."""
 
+EditResourceNeed = partial(ResourceNeed, 'edit')
+EditResourceNeed.__doc__ = """Needed to modify a specific resource."""
+
 PublishEntryNeed = partial(EntryNeed, 'publish')
 PublishEntryNeed.__doc__ = """Needed to publish a specific entry."""
+
+PublishResourceNeed = partial(ResourceNeed, 'publish')
+PublishResourceNeed.__doc__ = """Needed to publish a specific resource."""
 
 
 CreateEntryPermission = Permission(RoleNeed('user'),
@@ -89,6 +99,45 @@ class PublishEntryPermission(Permission):
         super().__init__(*needs)
 
 
+class EditResourcePermission(Permission):
+    """Permission to edit an resource.
+
+    A regular user has permission to edit their own entries, and an admin user
+    can edit any resource.
+
+    """
+    def __init__(self, resource_id):
+        super().__init__(
+            EditResourceNeed(resource_id),
+            RoleNeed('admin')
+        )
+
+
+class PublishResourcePermission(Permission):
+    """Permission to publish an resource.
+
+    Permission to publish is granted to a user based on their roles and the
+    publishing configuration.
+
+    If PUBLISH_OWN is True then a regular user can publish their own resources.
+    A user with one of the PUBLISH_MODERATORS roles can publish any resource.
+    An admin user has full control.
+
+    """
+    def __init__(self, resource_id):
+        # Admin always has permission
+        needs = [RoleNeed('admin')]
+
+        # Moderator roles
+        for role in app.config['PUBLISH_MODERATOR_ROLES']:
+            needs.append(RoleNeed(role))
+
+        # Publish entry permission required 
+        needs.append(PublishResourceNeed(resource_id))
+
+        super().__init__(*needs)
+
+
 _default_roles = []
 
 
@@ -117,6 +166,33 @@ def initialise_db():
         Role.get_or_create(name=role['name'], description=role['description'])
 
 
+def refresh_user_permissions(user, identity):
+    """Refresh the permissions granted to user.
+
+    Refreshes the user's permissions based on the resources they currently own.
+
+    """
+    # Allow a user to edit their own entries and uploads
+    entries = list(user.entries)
+    resources = list(user.uploads)
+    for entry in entries:
+        identity.provides.add(EditEntryNeed(entry.id))
+    for resource in resources:
+            identity.provides.add(EditResourceNeed(resource.id))
+
+    # If PUBLISH_OWN is True then give user publishing permission
+    if app.config['PUBLISH_OWN']:
+        for entry in entries:
+            identity.provides.add(PublishEntryNeed(entry.id))
+        for resource in resources:
+            identity.provides.add(PublishResourceNeed(resource.id))
+
+
+def refresh_current_permissions():
+    """Refresh the permissions for the current user."""
+    refresh_user_permissions(current_user, g.identity)
+
+
 @identity_loaded.connect_via(app)
 def on_identity_loaded(sender, identity):
     """Add the Needs for the authenticated user to their Identity."""
@@ -126,23 +202,9 @@ def on_identity_loaded(sender, identity):
     # Catch anonymous user logged in
     if not current_user.is_anonymous:
 
-        # Add the UserNeed
-        identity.provides.add(UserNeed(current_user.id))
-
-        # Update with roles the user provides
-        for role in current_user.roles:
-            identity.provides.add(RoleNeed(role.name))
-
-        entries = list(current_user.entries)
-
-        # Allow a user to edit their own entries
-        for entry in entries:
-            identity.provides.add(EditEntryNeed(entry.id))
-
-        # If PUBLISH_OWN is True then give user publishing permission
-        if app.config['PUBLISH_OWN']:
-            for entry in entries:
-                identity.provides.add(PublishEntryNeed(entry.id))
+        # Flask-security makes sure we already have the appropriate
+        # {User,Role}Needs, so don't add them again.
+        refresh_user_permissions(current_user, identity)
 
 
 def is_admin(user=None):
