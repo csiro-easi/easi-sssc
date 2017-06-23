@@ -55,11 +55,13 @@ function show_toolbox_template(url) {
   show_code(url, ".template-source", "ruby");
 }
 
-/**
- * Confirm publish actions before continuing.
- */
 $(function() {
+  /*
+   * Confirm publish actions before continuing.
+   */
   $('.confirm-publish').click(function() {
     return confirm('Are you sure you want to publish this entry?');
   });
+
 });
+

@@ -6,7 +6,7 @@ from flask_admin.contrib.peewee import ModelView
 from flask_admin.contrib.peewee.form import CustomModelConverter
 from flask_admin.form import BaseForm
 from flask_security import current_user
-from wtforms import fields
+from wtforms import fields, widgets
 from app import app
 from security import security, is_admin, is_user, PublishEntryPermission
 from models import Problem, Solution, Toolbox, User, UserRoles, \
@@ -27,6 +27,29 @@ class VarValuesConverter(CustomModelConverter):
 
     def handle_json(self, model, field, **kwargs):
         return field.name, fields.TextField(**kwargs)
+
+
+class UploadToURLWidget(widgets.TextInput):
+    """Include an upload button to fill in the text input."""
+    def __call__(self, field, **kwargs):
+        return u'\n'.join([
+            u'<div class="input-group">',
+            super().__call__(field, **kwargs),
+            u'<span class="input-group-btn">',
+            u'<button class="btn btn-default upload-to-url" type="button" data-toggle="modal" data-target="#uploadFileDialog">Upload...</button>',
+            u'</span> <!-- input-group-btn -->',
+            u'</div> <!-- input-group -->'
+        ])
+
+
+class UploadToURLField(fields.StringField):
+    """Include an upload button with a text field.
+
+    Allows the user to select a file to upload, then fills the text field with
+    the URL for the uploaded file.
+
+    """
+    widget = UploadToURLWidget()
 
 
 class ProtectedModelView(ModelView):
@@ -247,6 +270,9 @@ class ProblemAdmin(EntryModelView):
 class SolutionAdmin(EntryModelView):
     form_excluded_columns = EntryModelView.form_excluded_columns + \
                             ['template_hash']
+    form_overrides = {
+        'template': UploadToURLField
+    }
     model_form_converter = VarValuesConverter
     inline_models = (
         SolutionDependency,
@@ -259,6 +285,9 @@ class SolutionAdmin(EntryModelView):
 class ToolboxAdmin(EntryModelView):
     form_excluded_columns = EntryModelView.form_excluded_columns + \
                             ['puppet_hash']
+    form_overrides = {
+        'puppet': UploadToURLField
+    }
     model_form_converter = VarValuesConverter
     inline_models = (
         ToolboxDependency,

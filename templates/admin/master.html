@@ -1,0 +1,9 @@
+{% extends admin_base_template %}
+
+{% block tail %}
+{{ super() }}
+
+{% include 'upload_dialog.html' %}
+<script src="{{ url_for('static', filename='js/scm_upload.js') }}"></script>
+<script src="{{ url_for('static', filename='js/scm_admin.js') }}"></script>
+{% endblock %}
