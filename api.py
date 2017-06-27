@@ -1,5 +1,4 @@
 """Functions for defining and retrieving API objects. """
-from functools import wraps
 
 
 def expose(name=None, sense=None):
@@ -69,3 +68,5 @@ def get_exposed(x, handler=None, **kwargs):
             exposed[apiname] = value
 
     return exposed
+
+

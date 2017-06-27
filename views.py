@@ -1,6 +1,7 @@
 from datetime import datetime, date, time
 from flask import (Blueprint, request, render_template, url_for,
-                   jsonify, make_response, abort, redirect, flash)
+                   jsonify, make_response, abort, redirect, flash,
+                   send_from_directory)
 from flask.json import JSONEncoder
 from flask.views import MethodView
 from flask_security import current_user
@@ -11,20 +12,23 @@ from peewee import SelectQuery, DoesNotExist
 from rdflib import BNode, URIRef
 from rdflib.namespace import RDF
 from urllib.parse import parse_qs, urlparse
-from werkzeug.exceptions import BadRequest, InternalServerError, NotAcceptable
+from werkzeug.exceptions import InternalServerError, NotAcceptable
 from werkzeug.routing import RequestRedirect, MethodNotAllowed, NotFound
 
 from api import get_exposed
 from app import app
 import models
 from models import db, Toolbox, Entry, Problem, Solution, text_search, \
-    is_latest, is_unpublished, User, clone_model, \
+    is_latest, is_unpublished, User, clone_model, entry_type, \
     License, BaseModel, Role, Dependency, Signature, PublicKey, \
-    ProblemSignature, ToolboxSignature, SolutionSignature, Review
-from security import is_admin, PublishEntryPermission, \
-    ViewUnpublishedPermission
-from signatures import verify_signature
+    ProblemSignature, ToolboxSignature, SolutionSignature, Review, \
+    UploadedResource
 from namespaces import PROV
+from security import is_admin, EditEntryPermission, PublishEntryPermission, \
+    ViewUnpublishedPermission, EditResourcePermission, \
+    PublishResourcePermission, refresh_current_permissions
+from signatures import verify_signature
+from uploads import allowed_file, save_attachment, delete_upload
 
 site = Blueprint('site', __name__, template_folder='templates')
 
@@ -202,6 +206,11 @@ def action_url(action, entry):
         return url_for(endpoint, _external=True, entry=model_url(entry))
 
 
+def file_url(upload):
+    """Return the url for an attached file."""
+    return url_for('site.uploads_api', resource_id=upload.id)
+
+
 # These fields should *never* be returned to clients
 _hidden_fields = set([
     User.password,
@@ -216,7 +225,8 @@ _hidden_fields = set([
     Review.solutionreview_set,
     Problem.problemreview_set,
     Toolbox.toolboxreview_set,
-    Solution.solutionreview_set
+    Solution.solutionreview_set,
+    UploadedResource.filename
 ])
 
 _internal_identifiers = set([
@@ -227,7 +237,8 @@ _internal_identifiers = set([
     Solution.id,
     License.id,
     Dependency.id,
-    PublicKey.id
+    PublicKey.id,
+    UploadedResource.id
 ])
 
 # These fields should usually be returned as refs, not nested
@@ -242,7 +253,8 @@ _default_refs = set([
     Solution.latest,
     Solution.problem,
     Solution.versions,
-    Solution.signatures
+    Solution.signatures,
+    UploadedResource.user
 ])
 
 # User details shouldn't be included in most client interactions.
@@ -417,10 +429,6 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
     return data
 
 
-def entry_type(entry):
-    return type(entry).__name__
-
-
 def parse_review_request(request):
     """Parse review data in request and return data and any errors."""
     errors = None
@@ -484,9 +492,31 @@ def latest_only(entries):
         return filter(is_latest, entries)
 
 
-def can_publish(entry):
-    """Return True if the current user can publish entry."""
-    return PublishEntryPermission(entry.id).can()
+def can_publish(resource):
+    """Return True if the current user can publish resource."""
+    if isinstance(resource, Entry):
+        return PublishEntryPermission(resource.id).can()
+    elif isinstance(resource, UploadedResource):
+        return PublishResourcePermission(resource.id).can()
+    return False
+
+
+def can_edit(resource):
+    """Return True if the current user can edit resource."""
+    if isinstance(resource, Entry):
+        return EditEntryPermission(resource.id).can()
+    elif isinstance(resource, UploadedResource):
+        return EditResourcePermission(resource.id).can()
+    return False
+
+
+def can_delete(resource):
+    """Return True if the current user can delete resource.
+
+    Currently this is equivalent to edit permissions.
+
+    """
+    return can_edit(resource)
 
 
 @site.context_processor
@@ -495,6 +525,9 @@ def entry_processor():
                 model_url=model_url,
                 edit_url=edit_url,
                 action_url=action_url,
+                file_url=file_url,
+                can_delete=can_delete,
+                can_edit=can_edit,
                 can_publish=can_publish)
 
 
@@ -686,6 +719,22 @@ def get_models_for_url(url, method='GET'):
 
     # Find the view class and call the model lookup function for view_func.
     return view_func.view_class.get_models(**query)
+
+
+def ensure_entry(uri):
+    """Ensure uri identifies an existing entry, and return Entry.
+
+    Raise NotFound if no entry exists for uri.
+
+    """
+    entry = get_models_for_url(uri)
+    if entry:
+        if isinstance(entry, Entry):
+            return entry
+        else:
+            raise NotFound('URI does not identify a unique Entry ({})'
+                           .format(uri))
+    raise NotFound('Entry not found for uri ({})'.format(uri))
 
 
 # ======================================================================
@@ -1274,6 +1323,123 @@ class SignatureView(ResourceView):
         return "Invalid signature_id ({})".format(signature_id), 400
 
 
+class UploadView(MethodView):
+    def get(self, resource_id):
+        """Return an uploaded resource, ensuring permission to access it.
+
+        If no resource is specified, render the upload form for an html
+        request, or return a list of *published* resources if it's a json
+        request.
+
+        """
+        if resource_id is None:
+            best = best_mimetype('application/json', 'text/html')
+            if best == "application/json":
+                resources = UploadedResource.select().where(UploadedResource.published == True)
+                return jsonify(uploads=[model_to_dict(r) for r in resources])
+            elif best == "text/html":
+                return render_template('upload.html')
+        else:
+            try:
+                resource = UploadedResource.get(UploadedResource.id == resource_id)
+            except DoesNotExist:
+                abort(404)
+
+            if not resource.published:
+                if not (ViewUnpublishedPermission.can() or
+                        EditResourcePermission(resource.id).can()):
+                    print("View unpublished?", ViewUnpublishedPermission.can())
+                    print("Edit?", EditResourcePermission(resource.id).can())
+                    abort(403)
+
+            return send_from_directory(app.config['UPLOADS_DEFAULT_DEST'],
+                                       resource.filename,
+                                       as_attachment=True,
+                                       attachment_filename=resource.name)
+
+    @auth_required('token', 'session', 'basic')
+    def post(self):
+        """Upload file(s).
+
+        On success, returns the url of the uploaded file, or redirects to the
+        user's attachments page for entry for an HTML request.
+
+        """
+        # Redirect to the upload form if no file attached.
+        if 'file' not in request.files:
+            flash('No file part')
+            return redirect(request.url)
+
+        file = request.files['file']
+        if not file or file.filename == '':
+            flash('No file selected')
+            return redirect(request.url)
+        if not allowed_file(file.filename):
+            flash('Selected file is not an allowed type.')
+            return redirect(request.url)
+
+        name = request.form.get('filename')
+        upload = save_attachment(current_user, file, name=name)
+        if upload:
+            flash('File was successfully uploaded.')
+        else:
+            flash('Failed to upload file', 'error')
+
+        # Refresh the permissions for the current user
+        refresh_current_permissions()
+
+        # Return or redirect as required
+        best = best_mimetype('application/json', 'text/html')
+        if best == 'text/html':
+            # HACK: Get the real current_user object out of the
+            # werkzeug.local.LocalProxy - there must be a sensible way to do
+            # this!
+            return redirect(model_url(current_user._get_current_object()))
+        else:
+            return jsonify(model_to_dict(upload))
+
+    @auth_required('token', 'session', 'basic')
+    def delete(self, resource_id):
+        """Delete an unpublished uploaded file."""
+        resource = self.get_one(resource_id)
+        if not resource:
+            flash('No resource found for id {}'.format(resource_id), 'error')
+            abort(404)
+
+        if not can_delete(resource):
+            flash('You do not have permission to delete the resource.', 'error')
+            abort(403)
+
+        rv = model_to_dict(resource)
+        try:
+            delete_upload(resource)
+            flash('Upload was successfully deleted.')
+        except Exception as ex:
+            app.logger.error(ex)
+            flash('Failed to delete upload: {}'.format(ex), 'error')
+            abort(400)
+        return jsonify(rv)
+
+    @classmethod
+    def get_one(cls, resource_id, **kwargs):
+        resource = None
+        if resource_id is not None:
+            try:
+                resource = UploadedResource.get(UploadedResource.id == resource_id)
+            except DoesNotExist as ex:
+                return None
+        return resource
+
+    @classmethod
+    def get_models(cls, resource_id=None, **kwargs):
+        """Return the model(s) for resource_id and version."""
+        if resource_id is None:
+            return []
+        else:
+            return cls.get_one(resource_id, **kwargs)
+
+
+
 # Dispatch to json/html views
 def register_api(model, view, endpoint, url, pk='id', pk_type='int'):
     """Register the rules for a model api."""
@@ -1308,6 +1474,7 @@ register_api(User, UserView, 'user_api', '/users/', pk='user_id')
 register_api(License, LicenseView, 'license_api', '/licenses/', pk='license_id')
 register_api([ProblemSignature, ToolboxSignature, SolutionSignature, Signature],
              SignatureView, 'signature_api', '/signatures/', pk='signature_id')
+register_api(UploadedResource, UploadView, 'uploads_api', '/uploads/', pk='resource_id')
 
 
 # ======================================================================
@@ -1349,11 +1516,18 @@ def publish_entry():
     entry = get_models_for_url(uri)
     if not entry:
         abort(404)
-    elif not isinstance(entry, Entry):
-        return 'URI ({}) does not identify a unique entry.'.format(uri), 400
 
     # Make sure we have permission to publish the entry.
-    if not PublishEntryPermission(entry.id).can():
+    if isinstance(entry, Entry):
+        permission = PublishEntryPermission(entry.id)
+        redirect_target = model_url(entry)
+    elif isinstance(entry, UploadedResource):
+        permission = PublishResourcePermission(entry.id)
+        redirect_target = model_url(entry.user)
+    else:
+        return 'URI ({}) does not identify a unique entry.'.format(uri), 400
+
+    if not permission.can():
         abort(403)
 
     # Publish the entry (if required), and return the current status of the
@@ -1369,7 +1543,7 @@ def publish_entry():
 
     best = best_mimetype('application/json', 'text/html')
     if best == 'text/html':
-        return redirect(model_url(entry))
+        return redirect(redirect_target)
     else:
         return jsonify(model_to_dict(entry))
 

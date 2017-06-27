@@ -54,6 +54,43 @@
 </div>
 
 <div class="panel panel-default">
+  <div class="panel-heading"><h2 class="panel-title">Uploads</h2></div>
+  <table class="table table-hover">
+    <tr>
+      <th>Name</th>
+      <th>Uploaded</th>
+      <th>Published?</th>
+      <th>Actions</th>
+    </tr>
+
+    {% for upload in user.uploads %}
+    <tr>
+      <td><a href="{{ file_url(upload) }}">{{ upload.name }}</a></td>
+      <td>{{ upload.uploaded_at }}</td>
+      <td>
+        {% if upload.published %}
+        <span class="glyphicon glyphicon-ok-circle"></span>
+        {% endif %}
+      </td>
+      <td>
+        <div class="btn-group">
+          {% if not upload.published %}
+          {% if can_publish(upload) %}
+          <a class="btn btn-link btn-xs confirm-publish" role="button" href="{{action_url('publish', upload)}}">Publish</a>
+          {% endif %}
+
+          {% if can_edit(upload) %}
+          <button type="button" class="btn btn-link btn-xs delete-upload" data-resource="{{ model_url(upload) }}">Delete</button>
+          {% endif %}
+          {% endif %}
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="panel panel-default">
   <div class="panel-heading"><h2 class="panel-title">Signatures</h2></div>
   <div class="panel-body">
     <ul class="list-unstyled">
@@ -66,4 +103,22 @@
   </div>
 </div>
 
+{% endblock %}
+
+{% block js_footer %}
+{{ super() }}
+
+<script type="text/javascript">
+ $('.delete-upload').on('click', function(event) {
+     request = $.ajax({
+         url: $(this).data('resource'),
+         method: 'DELETE'
+     });
+
+     // Always refresh the page, and assume we'll have any errors flashed for the user.
+     request.always(function() {
+         location.reload(true);
+     });
+ });
+</script>
 {% endblock %}

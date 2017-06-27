@@ -388,6 +388,15 @@ class Entry(BaseModel):
         return "entry ({})".format(self.name)
 
 
+class UploadedResource(BaseModel):
+    """Store, and serve, an uploaded file."""
+    filename = CharField()
+    name = CharField()
+    uploaded_at = DateTimeField(default=datetime.now)
+    published = BooleanField(default=app.config['PUBLISH_DEFAULT'])
+    user = ForeignKeyField(User, related_name="uploads")
+
+
 class Tag(BaseModel):
     tag = CharField()
 
@@ -725,14 +734,18 @@ class ToolboxIndex(BaseIndexModel):
     toolbox = ForeignKeyField(Toolbox)
 
 
+def entry_type(entry):
+    return type(entry).__name__
+
+
 def index_entry(entry):
     """Add entry to the appropriate text index."""
-    entry_type = type(entry).__name__
+    et = entry_type(entry)
     cls = getattr(importlib.import_module(__name__),
-                  entry_type + 'Index')
+                  et + 'Index')
     if cls:
         obj = cls(name=entry.name, description=entry.description)
-        field = entry_type.lower()
+        field = et.lower()
         setattr(obj, field, entry)
         obj.save()
 
@@ -742,7 +755,8 @@ _TABLES = [User, Role, UserRoles, License, Problem, Toolbox, Signature,
            ToolboxVar, SolutionVar, Source, SolutionImage,
            ToolboxImage, ProblemSignature, ToolboxSignature, SolutionSignature,
            ProblemTag, ToolboxTag, SolutionTag,
-           Review, ProblemReview, SolutionReview, ToolboxReview]
+           Review, ProblemReview, SolutionReview, ToolboxReview,
+           UploadedResource]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 
 
