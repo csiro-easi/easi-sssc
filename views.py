@@ -9,8 +9,8 @@ from flask_security.decorators import auth_required, roles_accepted
 from functools import wraps
 from markdown import markdown
 from peewee import SelectQuery, DoesNotExist
-from rdflib import BNode, URIRef
-from rdflib.namespace import RDF
+from rdflib import BNode, Literal, URIRef
+from rdflib.namespace import RDF, FOAF
 from urllib.parse import parse_qs, urlparse
 from werkzeug.exceptions import InternalServerError, NotAcceptable
 from werkzeug.routing import RequestRedirect, MethodNotAllowed, NotFound
@@ -23,7 +23,8 @@ from models import db, Toolbox, Entry, Problem, Solution, text_search, \
     License, BaseModel, Role, Dependency, Signature, PublicKey, \
     ProblemSignature, ToolboxSignature, SolutionSignature, Review, \
     UploadedResource
-from namespaces import PROV
+from namespaces import PROV, SSSC, rdf_graph
+from prov import add_prov_dependency, add_prov_derivation
 from security import is_admin, EditEntryPermission, PublishEntryPermission, \
     ViewUnpublishedPermission, EditResourcePermission, \
     PublishResourcePermission, refresh_current_permissions
@@ -304,15 +305,8 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
         prov = prov_url(model)
         if prov:
             data['prov:has_provenance'] = prov
-        subject = URIRef(uri)
-    else:
-        subject = BNode()
     if isinstance(model, BaseModel):
-        g = model.semantic_types(subject)
-        # Carsten: Needs to be sorted to guarantee deterministic JSON for hashing
-        data['@type'] = sorted(t.n3(g.namespace_manager)
-                               for t in g.objects(subject=subject,
-                                                  predicate=RDF.type))
+        data['@type'] = type(model).__name__
 
     # Include exposed fields for the api
     for k, v in get_exposed(model, parent_handler=model_url).items():
@@ -737,6 +731,11 @@ def ensure_entry(uri):
     raise NotFound('Entry not found for uri ({})'.format(uri))
 
 
+def server_uri():
+    """Return a URIRef identifying this server."""
+    return URIRef(url_for("site.index", _external=True))
+
+
 # ======================================================================
 #
 # Resources API
@@ -744,57 +743,78 @@ def ensure_entry(uri):
 # ======================================================================
 
 class ResourceView(MethodView):
-    prov_context = {
-        "Entity": "http://www.w3.org/ns/prov#Entity",
-        "Plan": "http://www.w3.org/ns/prov#Plan",
-        "wasDerivedFrom": {
-            "@id": "http://www.w3.org/ns/prov#wasDerivedFrom",
-            "@type": "@id"
-        },
-        "toolboxes": {
-            "@type": "@id"
-        }
-    }
-
     api_fields = {}
 
     def prov_view(self, entry):
+        print('prov_view', entry, entry.version)
         # Build the RDF prov graph
-        g, subject = self.graph(entry)
+        g = self.graph(entry)
         # Return the appropriate serialization
         best = best_mimetype("application/ld+json",
                              "application/json",
                              "text/turtle",
                              "application/rdf+xml")
         if best is None:
-            return NotAcceptable
-        serialize_args = dict(format=best)
+            raise NotAcceptable
         mimetype = best
         if best == "application/json":
             best = "application/ld+json"
-            serialize_args = dict(format=best)
+        serialize_args = dict(format=best)
         if best == "application/ld+json":
-            serialize_args.update(context=self.prov_context,
-                                  indent=4)
+            context = dict((prefix, str(ns)) for prefix, ns in g.namespaces())
+            serialize_args.update(context=context, indent=4)
         resp = make_response(g.serialize(**serialize_args))
         resp.mimetype = mimetype
         return resp
 
-    def graph(self, entry):
-        """Return the RDF graph for this resource, and the subject reference.
+    def subject(self, entry):
+        """Return the RDF subject node for entry.
 
         If it's an identified object, use its URI as the subject (a URIRef) for
         the graph, otherwise create a new BNode to represent it.
 
-        Either way return a tuple (graph, subject).
-
         """
-        subject = model_url(entry)
-        if subject:
-            subject = URIRef(subject)
-        else:
-            subject = BNode()
-        return entry.semantic_types(subject), subject
+        if not hasattr(self, '_subjects'):
+            self._subjects = {}
+
+        if entry not in self._subjects:
+            s = model_url(entry, pinned=True)
+            if s:
+                s = URIRef(s)
+            else:
+                s = BNode()
+            self._subjects[entry] = s
+
+        return self._subjects[entry]
+
+    def graph(self, entry):
+        """Return the RDF graph for this resource."""
+        g = rdf_graph()
+        subject = self.subject(entry)
+
+        # Bundle
+        base = URIRef(prov_url(entry))
+        server = server_uri()
+        for t in [(base, RDF.type, PROV.Bundle),
+                  (base, RDF.type, PROV.Entity),
+                  (base, PROV.wasAttributedTo, server),
+                  (base, PROV.generatedAtTime, Literal(datetime.now())),
+                  (server, RDF.type, PROV.SoftwareAgent),
+                  (server, RDF.type, PROV.Agent),
+                  (server,
+                   FOAF.name,
+                   Literal("Scientific Software Solutions Centre"))]:
+            g.add(t)
+
+        # Semantic types
+        for t in self.semantic_types():
+            g.add((subject, RDF.type, t))
+
+        return g
+
+    def semantic_types(self):
+        """Return a list of the semantic types for this resource."""
+        return [PROV.Entity]
 
     def is_update_allowed(resource, key):
         """Return True if current user can update key for resource.
@@ -890,7 +910,7 @@ class EntryView(ResourceView):
             entry = self.get_one(entry_id, version)
             if not entry:
                 abort(404)
-            if request.url.endswith('/prov'):
+            if request.path.endswith('/prov'):
                 return self.prov_view(entry)
             elif best == "application/json":
                 # Do *not* include internal ids, except if requested using the
@@ -993,9 +1013,9 @@ class EntryView(ResourceView):
                 )
             else:
                 entry = model.get(
-                    (model.version == version) &
+                    (model.version == int(version)) &
                     ((model.latest == entry_id) |
-                     (model.latest == None))
+                     (model.id == entry_id))
                 )
         except DoesNotExist:
             return None
@@ -1040,15 +1060,64 @@ class EntryView(ResourceView):
         else:
             return cls.get_one(entry_id, **kwargs)
 
+    def get_previous(self, entry):
+        """Return the Entry that is the previous version of entry."""
+        return self.model.get(self.model.version == entry.version - 1)
+
+    def graph(self, entry):
+        """Return the RDF PROV graph for this Entry."""
+        g = super().graph(entry)
+        s = self.subject(entry)
+
+        # Dependencies become Prov Derivations
+        for d in getattr(entry, 'deps', []):
+            add_prov_dependency(g, s, d)
+
+        # Include revision history. Add a description of the permanent link for
+        # this entry, plus revision info for this specific version.
+        latest = entry if is_latest(entry) else entry.latest
+        latest = URIRef(model_url(latest))
+        for t in self.semantic_types():
+            g.add((latest, RDF.type, t))
+        g.add((s, PROV.specializationOf, latest))
+
+        if entry.version > 1:
+            previous = URIRef(model_url(entry, version=entry.version - 1))
+            g.add((s, PROV.wasRevisionOf, previous))
+            g.add((s, PROV.alternateOf, previous))
+
+        # Include info about how this entry was generated
+        generationTime = Literal(entry.created_at)
+        author = URIRef(model_url(entry.author))
+        label = 'creation' if entry.version == 1 else 'edit'
+        activity = BNode("{}Activity".format(label))
+        g.add((activity, PROV.startedAtTime, generationTime))
+        g.add((activity, PROV.endedAtTime, generationTime))
+        g.add((activity, PROV.wasStartedBy, author))
+        g.add((activity, PROV.wasEndedBy, author))
+        g.add((activity, PROV.wasAssociatedWith, server_uri()))
+        g.add((activity, PROV.generated, s))
+
+        g.add((s, PROV.wasGeneratedBy, activity))
+        g.add((s, PROV.generatedAtTime, generationTime))
+
+        return g
+
 
 class ProblemView(EntryView):
     detail_template = 'entries/problem_detail.html'
     model = Problem
 
+    def semantic_types(self):
+        return super().semantic_types() + [SSSC.Problem]
+
 
 class SolutionView(EntryView):
     detail_template = 'entries/solution_detail.html'
     model = Solution
+
+    def semantic_types(self):
+        return super().semantic_types() + [PROV.Plan, SSSC.Solution]
 
     def get(self, entry_id=None):
         self.problem_id = request.args.get("problem")
@@ -1062,23 +1131,55 @@ class SolutionView(EntryView):
         return query
 
     def graph(self, entry):
-        g, solution = super().graph(entry)
-        for t in entry.deps:
-            if isinstance(t, Toolbox):
-                g.add((solution, PROV.wasDerivedFrom, URIRef(model_url(t))))
-        g.add((solution,
-               PROV.wasDerivedFrom,
-               URIRef(model_url(entry.problem))))
-        return g, solution
+        """Return the RDF PROV graph for this Entry.
+
+        A Solution is derived from a Problem and its template.
+
+        """
+        g = super().graph(entry)
+        s = self.subject(entry)
+
+        problem = URIRef(model_url(entry.problem))
+        derivation = add_prov_derivation(g, s, problem)
+        g.add((derivation, RDF.type, SSSC.ProblemSolution))
+
+        template = URIRef(entry.template)
+        derivation = add_prov_derivation(g, s, template)
+        g.add((derivation, RDF.type, SSSC.SolutionTemplate))
+
+        return g
 
 
 class ToolboxView(EntryView):
     detail_template = 'entries/toolbox_detail.html'
     model = Toolbox
 
+    def semantic_types(self):
+        return super().semantic_types() + [SSSC.Toolbox]
+
+    def graph(self, entry):
+        """Return the RDF PROV graph for this Entry.
+
+        A Toolbox is derived from its puppet module and its source.
+
+        """
+        g = super().graph(entry)
+
+        if entry.puppet:
+            s = self.subject(entry)
+
+            puppet = URIRef(entry.puppet)
+            derivation = add_prov_derivation(g, s, puppet)
+            g.add((derivation, RDF.type, SSSC.ToolboxImplementation))
+
+        return g
+
 
 class UserView(ResourceView):
     modifiable_fields = ['name', 'email', 'public_key']
+
+    def semantic_types(self, entry):
+        return [SSSC.User, PROV.Agent, PROV.Person]
 
     def get(self, user_id):
         best = best_mimetype("application/json", "text/html")
@@ -1437,7 +1538,6 @@ class UploadView(MethodView):
             return []
         else:
             return cls.get_one(resource_id, **kwargs)
-
 
 
 # Dispatch to json/html views
