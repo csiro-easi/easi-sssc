@@ -1,9 +1,11 @@
 from rdflib import Graph, Namespace
+from rdflib.namespace import FOAF
 
 PROV = Namespace("http://www.w3.org/ns/prov#")
 SSSC = Namespace("http://example.org/sssc#")
 
 ns_bindings = [
+    ('foaf', FOAF),
     ('prov', PROV),
     ('sssc', SSSC)
 ]

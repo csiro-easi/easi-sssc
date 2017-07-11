@@ -11,10 +11,8 @@ from peewee import BooleanField, CharField, DateTimeField, \
 # from peewee import SqliteDatabase
 from playhouse.sqlite_ext import FTSModel, SqliteExtDatabase
 from flask_security import UserMixin, RoleMixin, current_user
-from rdflib.namespace import RDF
 import api
 from app import app
-from namespaces import PROV, SSSC, rdf_graph
 
 # Valid source repositories
 SOURCE_TYPES = (('git', 'GIT repository'),
@@ -132,23 +130,7 @@ class BaseModel(Model):
     """Base of all application models.
 
     Sets database connection.
-    Base semantic description functionality.
-
     """
-    _semantic_types = []
-
-    def semantic_types(self, subject):
-        """Return an RDF graph describing an instnace of this model.
-
-        Subject is a BNode or URIRef.
-
-        """
-        g = rdf_graph()
-        g.add((subject, RDF.type, SSSC[type(self).__name__]))
-        for t in self._semantic_types:
-            g.add((subject, RDF.type, t))
-        return g
-
     class Meta:
         database = db
 
@@ -177,8 +159,6 @@ class User(BaseModel, UserMixin):
     public_key = property(
         lambda self: self._get_public_key()
     )
-
-    _semantic_types = [PROV.Agent, PROV.Person]
 
     def _get_public_key(self):
         """Return the current (most recent) public key."""
@@ -311,8 +291,6 @@ class Entry(BaseModel):
             query = self.solutionreview_set
         return [rel.review for rel in query]
 
-    _semantic_types = [PROV.Entity]
-
     # Fields that do not cause a version change when they are changed.
     _ignored_dirty_fields = frozenset({
         'published'
@@ -405,8 +383,6 @@ class License(BaseModel):
     name = CharField(unique=True)
     url = CharField(null=True)
     text = TextField(null=True)
-
-    _semantic_types = [PROV.Entity]
 
     def __unicode__(self):
         return self.name if self.name else self.url
@@ -537,8 +513,6 @@ class Solution(Entry):
     runtime = CharField(choices=RUNTIME_CHOICES, default="python")
     template = CharField(help_text="URL of template that implements this Solution.")
     template_hash = CharField(null=True)
-
-    _semantic_types = [PROV.Entity, PROV.Plan]
 
     def check_resources(self, resources=None):
         resources = resources or [('template', 'template_hash')]

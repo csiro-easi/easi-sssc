@@ -29,6 +29,19 @@ GET http://localhost:5000/signatures/1
 DELETE http://localhost:5000/signatures/1
 Authorization: :example-auth
 
+# test versioning
+GET http://localhost:5000/solutions/1
+
+# test versioning
+GET http://localhost:5000/solutions/1?version=1
+
+# test versioning
+GET http://localhost:5000/solutions/1?version=2
+
+# Bad version
+GET http://localhost:5000/solutions/1?version=42
+
+
 # Info for user
 GET http://localhost:5000/users/1
 
@@ -75,8 +88,17 @@ Content-Type: text/plain
 "Not a valid Public Key! With plain text and PUT!"
 
 
-# Can we still get prov?
+# Can we still get prov json-ld?
+GET http://localhost:5000/solutions/1/prov
+Accept: application/json
+
+# Can we still get prov ttl?
+GET http://localhost:5000/solutions/1/prov?version=2
+Accept: text/turtle
+
+# Can we still get prov ttl?
 GET http://localhost:5000/users/1/prov
+Accept: text/turtle
 
 # Update a problem
 PATCH http://localhost:5000/problems/1
