@@ -450,7 +450,6 @@ def parse_review_request(request):
 
 def save_review(data, entry):
     """Save review instance and associate it with entry."""
-    rel = None
 
     # Create a new <Entry>Review instance
     rel_class_name = "{}Review".format(entry_type(entry))
@@ -467,7 +466,7 @@ def save_review(data, entry):
         review = Review.create(reviewer=current_user.id, **data)
 
         # Associate review with entry
-        rel = rel_class.create(review=review, entry=entry)
+        rel_class.create(review=review, entry=entry)
     except Exception as ex:
         raise InternalServerError('Failed to save review: {}'.format(str(ex)))
 
@@ -657,8 +656,8 @@ def best_mimetype(*mimetypes, default=None, request_obj=None):
     #
     # This is a temporary fix to allow an explicit 'mimetype' parameter in the
     # request arguments. This shouldn't be required once explicit api endpoints
-    # are created, and the main URLs can redirect to them using standard content
-    # negotiation.
+    # are created, and the main URLs can redirect to them using standard
+    # content negotiation.
     best = request_obj.args.get('mimetype')
     if not best:
         # Do the usual content negotiation dance.
@@ -840,7 +839,9 @@ class ResourceView(MethodView):
 
         """
         if resource is None:
-            app.logger.warn('Null resource passed to ResourceView.update_resource')
+            app.logger.warn(
+                'Null resource passed to ResourceView.update_resource'
+            )
             return
         if not data:
             return
@@ -956,7 +957,8 @@ class EntryView(ResourceView):
         if not entry:
             abort(404)
 
-        # Ensure the user has the correct permissions for the current configuration
+        # Ensure the user has the correct permissions for the current
+        # configuration
         if not PublishEntryPermission(entry_id).can():
             abort(403)
 
@@ -967,7 +969,8 @@ class EntryView(ResourceView):
 
         # Support updating published field only for now
         if len(data) != 1 or 'published' not in data:
-            return 'The "published" field is the only one that can be updated using PATCH on an entry.', 400, None
+            return ('The "published" field is the only one that can be updated'
+                    ' using PATCH on an entry.', 400, None)
 
         # Update the entry
         published = parse_boolean_param(data.get('published'))
@@ -1369,7 +1372,7 @@ class SignatureView(ResourceView):
         now = datetime.utcnow()
         sign_time = datetime.strptime(sig_fields[1], "%Y-%m-%d %H:%M:%S")
 
-        delta_t = now- sign_time
+        delta_t = now - sign_time
 
         if delta_t.total_seconds() > 5*60:
             return "Signature older than 5 minutes", 400
@@ -1436,13 +1439,17 @@ class UploadView(MethodView):
         if resource_id is None:
             best = best_mimetype('application/json', 'text/html')
             if best == "application/json":
-                resources = UploadedResource.select().where(UploadedResource.published == True)
+                resources = (UploadedResource
+                             .select()
+                             .where(UploadedResource.published == True))
                 return jsonify(uploads=[model_to_dict(r) for r in resources])
             elif best == "text/html":
                 return render_template('upload.html')
         else:
             try:
-                resource = UploadedResource.get(UploadedResource.id == resource_id)
+                resource = UploadedResource.get(
+                    UploadedResource.id == resource_id
+                )
             except DoesNotExist:
                 abort(404)
 
@@ -1508,7 +1515,8 @@ class UploadView(MethodView):
             abort(404)
 
         if not can_delete(resource):
-            flash('You do not have permission to delete the resource.', 'error')
+            flash('You do not have permission to delete the resource.',
+                  'error')
             abort(403)
 
         rv = model_to_dict(resource)
@@ -1526,7 +1534,9 @@ class UploadView(MethodView):
         resource = None
         if resource_id is not None:
             try:
-                resource = UploadedResource.get(UploadedResource.id == resource_id)
+                resource = UploadedResource.get(
+                    UploadedResource.id == resource_id
+                )
             except DoesNotExist as ex:
                 return None
         return resource
@@ -1558,7 +1568,8 @@ def register_api(model, view, endpoint, url, pk='id', pk_type='int'):
     site.add_url_rule(url, view_func=view_func, methods=['POST'])
     site.add_url_rule('{}<{}:{}>'.format(url, pk_type, pk),
                       view_func=view_func, methods=['GET', 'PATCH', 'DELETE'])
-    site.add_url_rule('{}<{}:{}>/<{}:{}>'.format(url, pk_type, pk, 'string', 'prop'),
+    site.add_url_rule('{}<{}:{}>/<{}:{}>'.format(url, pk_type, pk, 'string',
+                                                 'prop'),
                       view_func=view_func, methods=['PUT'])
 
     # Prov endpoint
@@ -1569,12 +1580,18 @@ def register_api(model, view, endpoint, url, pk='id', pk_type='int'):
 
 register_api(Toolbox, ToolboxView, 'toolbox_api', '/toolboxes/', pk='entry_id')
 register_api(Problem, ProblemView, 'problem_api', '/problems/', pk='entry_id')
-register_api(Solution, SolutionView, 'solution_api', '/solutions/', pk='entry_id')
+register_api(Solution, SolutionView, 'solution_api', '/solutions/',
+             pk='entry_id')
 register_api(User, UserView, 'user_api', '/users/', pk='user_id')
-register_api(License, LicenseView, 'license_api', '/licenses/', pk='license_id')
-register_api([ProblemSignature, ToolboxSignature, SolutionSignature, Signature],
+register_api(License, LicenseView, 'license_api', '/licenses/',
+             pk='license_id')
+register_api([ProblemSignature,
+              ToolboxSignature,
+              SolutionSignature,
+              Signature],
              SignatureView, 'signature_api', '/signatures/', pk='signature_id')
-register_api(UploadedResource, UploadView, 'uploads_api', '/uploads/', pk='resource_id')
+register_api(UploadedResource, UploadView, 'uploads_api', '/uploads/',
+             pk='resource_id')
 
 
 # ======================================================================
