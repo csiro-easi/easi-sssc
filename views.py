@@ -75,13 +75,6 @@ class SSSCJSONEncoder(JSONEncoder):
 app.json_encoder = SSSCJSONEncoder
 
 
-# Connect to the database now to catch any errors here
-@app.before_first_request
-def first_setup():
-    print("Setting up")
-    db.connect()
-
-
 # These will be updated with model views after those are defined.
 #
 # Keys are model classes.

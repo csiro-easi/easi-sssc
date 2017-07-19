@@ -1,13 +1,24 @@
 from collections import namedtuple
 from flask import g
-from flask_principal import identity_loaded, Permission, RoleNeed, UserNeed
+from flask_principal import identity_loaded, Permission, RoleNeed
 from flask_security import PeeweeUserDatastore, Security, current_user, \
     RegisterForm, user_confirmed
 from flask_security.forms import Required
 from functools import partial
+import os
 from wtforms import StringField
 from app import app
-from models import db, create_database, User, Role, UserRoles
+from models import db, User, Role, UserRoles
+
+
+DEFAULT_PWD_LENGTH = 13
+
+
+def genpassword(length=DEFAULT_PWD_LENGTH):
+    """Generate and return a new random password of length."""
+    chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/'
+    return ''.join(chars[ord(os.urandom(1)) % len(chars)]
+                   for i in range(length))
 
 
 class ScmRegisterForm(RegisterForm):
@@ -132,7 +143,7 @@ class PublishResourcePermission(Permission):
         for role in app.config['PUBLISH_MODERATOR_ROLES']:
             needs.append(RoleNeed(role))
 
-        # Publish entry permission required 
+        # Publish entry permission required
         needs.append(PublishResourceNeed(resource_id))
 
         super().__init__(*needs)
@@ -159,11 +170,39 @@ def on_user_confirmed(sender, user):
     user_datastore.add_role_to_user(user, user_role)
 
 
+@app.before_first_request
 def initialise_db():
-    """Initialise the database with default roles."""
-    create_database(db)
+    """Initialise the database with default roles and users.
+
+    Ensures all of the default roles are available in the database. If a
+    default admin user is configured, ensure that user exists in the database
+    too. Note that they will need to run through the forgotten password process
+    before they can be used.
+
+    """
     for role in _default_roles:
         Role.get_or_create(name=role['name'], description=role['description'])
+    admin_email = app.config.get('DEFAULT_ADMIN_EMAIL')
+    if admin_email:
+        app.logger.info('Ensuring default admin user account ({}) exists.'
+                        .format(admin_email))
+        admin = user_datastore.get_user(admin_email)
+        if admin:
+            # Check that it is an admin, but just warn if it's not.
+            app.logger.info('Default admin user account already exists.')
+            if not admin.has_role(admin_role):
+                app.logger.warn(
+                    'Default admin account does *not* belong to an admin role.'
+                )
+            if not admin.is_active:
+                app.logger.warn('Default admin account is inactive.')
+        else:
+            admin = user_datastore.create_user(email=admin_email,
+                                               name='Admin User',
+                                               password=genpassword())
+            user_datastore.add_role_to_user(admin, admin_role)
+            app.logger.info('New admin account was created, but still needs to'
+                            ' be confirmed and have its password reset.')
 
 
 def refresh_user_permissions(user, identity):
