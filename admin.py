@@ -116,7 +116,6 @@ class EntryModelView(ProtectedModelView):
 
     """
     can_view_details = True
-    column_editable_list = ['name', 'description']
     column_filters = ['name', 'published', 'created_at']
     column_list = ['name', 'description', 'author', 'version', 'created_at', 'published']
     column_sortable_list = ['author', 'published', 'created_at']
