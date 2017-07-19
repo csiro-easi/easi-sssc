@@ -1,5 +1,9 @@
 {% extends admin_base_template %}
 
+{% macro render_long_text(model, column) %}
+  <span title="{{ model[column] }}">{{ model[column]|truncate(72) }}...</span>
+{% endmacro %}
+
 {% block tail %}
 {{ super() }}
 

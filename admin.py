@@ -5,6 +5,7 @@ from flask_admin.babel import gettext, ngettext
 from flask_admin.contrib.peewee import ModelView
 from flask_admin.contrib.peewee.form import CustomModelConverter
 from flask_admin.form import BaseForm
+from flask_admin.model.template import macro
 from flask_security import current_user
 from wtforms import fields, widgets
 from app import app
@@ -117,6 +118,16 @@ class EntryModelView(ProtectedModelView):
     """
     can_view_details = True
     column_filters = ['name', 'published', 'created_at']
+
+    # Truncate long descriptions in the list view. Use a macro rather than
+    # truncating here so the full value is available as a tooltip.
+    #
+    # Also, don't clog up display with microsecond creation times.
+    column_formatters = dict(
+        description=macro('render_long_text'),
+        created_at=lambda v, c, m, p: m.created_at.replace(microsecond=0).isoformat(' ')
+    )
+
     column_list = ['name', 'description', 'author', 'version', 'created_at', 'published']
     column_sortable_list = ['author', 'published', 'created_at']
     create_modal = False
