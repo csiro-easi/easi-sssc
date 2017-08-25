@@ -669,7 +669,7 @@ def best_mimetype(*mimetypes, default=None, request_obj=None):
 
 def get_view_func(url, method='GET'):
     """Return the view function and arguments matching url, or None."""
-    adapter = app.url_map.bind(app.config['SERVER_NAME'])
+    adapter = app.url_map.bind('localhost')
 
     try:
         match = adapter.match(url, method=method)
