@@ -5,6 +5,8 @@ services:
       - 80:80
     volumes:
       - sssc-data:/var/lib/scm
+    environment:
+      - SSSC_CONFIG=${SSSC_CONFIG:-/var/lib/scm/scm.config}
 
 volumes:
   sssc-data:

@@ -9,6 +9,7 @@ services:
       - .:/app
     environment:
       - DEBUG=true
+      - SSSC_CONFIG=${SSSC_CONFIG-/var/lib/scm/scm.config}
     entrypoint: python
     command: main.py
 
