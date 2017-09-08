@@ -1,14 +1,13 @@
 # coding: utf-8
 
-from models import db, Problem, Solution, Toolbox,  drop_tables, index_entry, \
-    License
-from security import initialise_db
+from models import db, Problem, Solution, Toolbox, create_database, drop_tables, \
+    index_entry, License
 
 
 def bootstrap():
     db.connect()
     drop_tables(db)
-    initialise_db()
+    create_database(db)
 
     # import entries.escript
     # entries.escript.create(user1)
