@@ -1,12 +1,14 @@
-version: '2.1'
+version: '3.3'
 services:
   web:
     build: .
     ports:
       - 5000:5000
     volumes:
+      - ${SSSC_DATA_DIR:-/var/lib/scm}:/var/lib/scm
       - .:/app
     environment:
       - DEBUG=true
     entrypoint: python
     command: main.py
+
