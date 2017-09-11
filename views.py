@@ -875,6 +875,7 @@ class ResourceView(MethodView):
 class EntryView(ResourceView):
     detail_template = 'entries/detail.html'
     model = None
+    entries_key = None
 
     """Handle a single entry."""
     def get(self, entry_id=None):
@@ -882,9 +883,9 @@ class EntryView(ResourceView):
         if entry_id is None:
             entries = self.get_list()
             if best == "application/json":
-                key = pluralise(self.model.__name__)
                 return jsonldify({
-                    key: [model_to_dict(entry) for entry in entries]
+                    self.entries_key: [model_to_dict(entry)
+                                       for entry in entries]
                 })
             elif best == "text/html":
                 entries_url = url_for(model_endpoint(self.model),
@@ -1103,6 +1104,7 @@ class EntryView(ResourceView):
 class ProblemView(EntryView):
     detail_template = 'entries/problem_detail.html'
     model = Problem
+    entries_key = 'problems'
 
     def semantic_types(self):
         return super().semantic_types() + [SSSC.Problem]
@@ -1111,6 +1113,7 @@ class ProblemView(EntryView):
 class SolutionView(EntryView):
     detail_template = 'entries/solution_detail.html'
     model = Solution
+    entries_key = 'solutions'
 
     def semantic_types(self):
         return super().semantic_types() + [PROV.Plan, SSSC.Solution]
@@ -1149,6 +1152,7 @@ class SolutionView(EntryView):
 class ToolboxView(EntryView):
     detail_template = 'entries/toolbox_detail.html'
     model = Toolbox
+    entries_key = 'toolboxes'
 
     def semantic_types(self):
         return super().semantic_types() + [SSSC.Toolbox]
