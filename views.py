@@ -1,4 +1,4 @@
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timezone
 from flask import (Blueprint, request, render_template, url_for,
                    jsonify, make_response, abort, redirect, flash,
                    send_from_directory)
@@ -66,7 +66,8 @@ class SSSCJSONEncoder(JSONEncoder):
         if (isinstance(o, datetime) or
             isinstance(o, date) or
             isinstance(o, time)):
-            return o.isoformat()
+            # Datetimes are UTC in the database, so add the timezone specifier
+            return o.replace(tzinfo=timezone.utc).isoformat(timespec='seconds')
 
         return JSONEncoder.default(self, o)
 

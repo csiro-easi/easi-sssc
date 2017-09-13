@@ -1,5 +1,5 @@
 # Dockerize the SSSC website
-FROM tiangolo/uwsgi-nginx:python3.5
+FROM tiangolo/uwsgi-nginx:python3.6
 
 MAINTAINER Geoff Squire <geoffrey.squire@csiro.au>
 
