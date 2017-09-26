@@ -22,6 +22,8 @@ from models import db, Toolbox, Entry, Problem, Solution, text_search, \
     is_latest, is_unpublished, User, clone_model, entry_type, \
     License, BaseModel, Role, Dependency, Signature, PublicKey, \
     ProblemSignature, ToolboxSignature, SolutionSignature, Review, \
+    SolutionDependency, SolutionImage, SolutionTag, \
+    ToolboxDependency, ToolboxImage, ToolboxTag, \
     UploadedResource
 from namespaces import PROV, SSSC, rdf_graph
 from prov import add_prov_dependency, add_prov_derivation
@@ -233,7 +235,13 @@ _internal_identifiers = set([
     License.id,
     Dependency.id,
     PublicKey.id,
-    UploadedResource.id
+    UploadedResource.id,
+    SolutionDependency.id,
+    SolutionImage.id,
+    SolutionTag.id,
+    ToolboxDependency.id,
+    ToolboxImage.id,
+    ToolboxTag.id
 ])
 
 # These fields should usually be returned as refs, not nested
@@ -477,6 +485,22 @@ def latest_only(entries):
     """Return a new list consisting of only the latest versions of entries."""
     if entries:
         return filter(is_latest, entries)
+
+
+def can_read(resource):
+    """Return True if the current user can read resource."""
+    if isinstance(resource, Entry):
+        return (resource.published or
+                ViewUnpublishedPermission.can() or
+                EditEntryPermission(resource.id).can())
+    return False
+
+
+@app.template_filter('readable_only')
+def readable_only(entries):
+    """Return a new list containing only readable entries."""
+    if entries:
+        return filter(can_read, entries)
 
 
 def can_publish(resource):

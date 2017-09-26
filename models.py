@@ -451,10 +451,16 @@ class Image(BaseModel):
 
     provider -- Cloud (or other) provider of this image
     image_id -- Identifier for this image
+    command -- Optional wrapper command required when running on this image
     """
     provider = CharField()
-    
     image_id = CharField()
+    command = CharField(
+        null=True,
+        help_text=("When running on this Image, override the command-line "
+                   "template (if any) for executing a Solution using this "
+                   "Toolbox.")
+    )
 
 
 class Toolbox(Entry):
