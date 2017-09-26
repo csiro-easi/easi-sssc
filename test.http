@@ -108,3 +108,14 @@ Content-Type: application/merge-patch+json
 {
   "published": "true"
 }
+
+# test deployment
+GET https://sssc-vgl.geoanalytics.csiro.au/problems/5
+# test deployment
+GET https://sssc-vgl.geoanalytics.csiro.au/solutions/16
+
+# test deployment
+GET http://localhost:5000/problems/5
+
+# Get a problem to sign
+GET http://localhost:5000/toolboxes/4
