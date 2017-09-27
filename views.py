@@ -270,7 +270,8 @@ _default_exclude = set([
     User.problems,
     User.solutions,
     User.toolboxes,
-    User.public_keys
+    User.public_keys,
+    User.uploads
 ])
 
 
