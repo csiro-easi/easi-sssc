@@ -51,7 +51,7 @@ resource_hash = getattr(hashlib, app.config['RESOURCE_HASH_FUNCTION'])
 def text_search(text, latest_only=True):
     """Search for entries that match text.
 
-    Returns a list of entries that matched text. By default only the latest
+    Returns a dict of entries that matched text. By default only the latest
     versions that match are returned. If latest_only is False then all matching
     versions will be returned.
 
@@ -62,25 +62,26 @@ def text_search(text, latest_only=True):
             c = c & cls.latest.is_null()
         return c
 
-    matches = list(Problem
-                   .select()
-                   .join(ProblemIndex,
-                         on=(Problem.id == ProblemIndex.docid))
-                   .where(constraint(Problem, ProblemIndex))
-                   .order_by(ProblemIndex.bm25()))
-    matches.extend(Toolbox
+    return dict(
+        problems=(Problem
+                  .select()
+                  .join(ProblemIndex,
+                        on=(Problem.id == ProblemIndex.docid))
+                  .where(constraint(Problem, ProblemIndex))
+                  .order_by(ProblemIndex.bm25())),
+        toolboxes=(Toolbox
                    .select()
                    .join(ToolboxIndex,
                          on=(Toolbox.id == ToolboxIndex.docid))
                    .where(constraint(Toolbox, ToolboxIndex))
-                   .order_by(ToolboxIndex.bm25()))
-    matches.extend(Solution
+                   .order_by(ToolboxIndex.bm25())),
+        solutions=(Solution
                    .select()
                    .join(SolutionIndex,
                          on=(Solution.id == SolutionIndex.docid))
                    .where(constraint(Solution, SolutionIndex))
                    .order_by(SolutionIndex.bm25()))
-    return matches
+    )
 
 
 _rels_ignored_for_cloning = frozenset({
