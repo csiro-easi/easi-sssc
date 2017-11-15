@@ -1748,16 +1748,20 @@ def review_entry():
 
 @site.route('/search')
 def search():
-    results = []
     if request.method == 'POST':
         search = request.form.get("search")
     else:
         search = request.args.get("search")
-    if search:
-        results = text_search(search)
-    return render_template('search_results.html',
-                           search=search,
-                           results=results)
+    results = text_search(search)
+
+    best = best_mimetype('application/json', 'text/html')
+    if best == 'text/html':
+        return render_template('search_results.html',
+                               search=search,
+                               results=results)
+    else:
+        return jsonldify({k: [model_to_dict(e) for e in entries]
+                          for k, entries in results.items()})
 
 
 @site.route('/sssc.jsonld')

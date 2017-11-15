@@ -62,26 +62,28 @@ def text_search(text, latest_only=True):
             c = c & cls.latest.is_null()
         return c
 
-    return dict(
-        problems=(Problem
-                  .select()
-                  .join(ProblemIndex,
-                        on=(Problem.id == ProblemIndex.docid))
-                  .where(constraint(Problem, ProblemIndex))
-                  .order_by(ProblemIndex.bm25())),
-        toolboxes=(Toolbox
-                   .select()
-                   .join(ToolboxIndex,
-                         on=(Toolbox.id == ToolboxIndex.docid))
-                   .where(constraint(Toolbox, ToolboxIndex))
-                   .order_by(ToolboxIndex.bm25())),
-        solutions=(Solution
-                   .select()
-                   .join(SolutionIndex,
-                         on=(Solution.id == SolutionIndex.docid))
-                   .where(constraint(Solution, SolutionIndex))
-                   .order_by(SolutionIndex.bm25()))
-    )
+    results = dict(problems=[], toolboxes=[], solutions=[])
+
+    if text:
+        results["problems"] = (Problem
+                               .select()
+                               .join(ProblemIndex,
+                                     on=(Problem.id == ProblemIndex.docid))
+                               .where(constraint(Problem, ProblemIndex))
+                               .order_by(ProblemIndex.bm25()))
+        results["toolboxes"] = (Toolbox
+                                .select()
+                                .join(ToolboxIndex,
+                                      on=(Toolbox.id == ToolboxIndex.docid))
+                                .where(constraint(Toolbox, ToolboxIndex))
+                                .order_by(ToolboxIndex.bm25()))
+        results["solutions"] = (Solution
+                                .select()
+                                .join(SolutionIndex,
+                                      on=(Solution.id == SolutionIndex.docid))
+                                .where(constraint(Solution, SolutionIndex))
+                                .order_by(SolutionIndex.bm25()))
+    return results
 
 
 _rels_ignored_for_cloning = frozenset({
