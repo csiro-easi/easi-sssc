@@ -211,9 +211,6 @@ def file_url(upload):
 # These fields should *never* be returned to clients
 _hidden_fields = set([
     User.password,
-    Problem.problemindex_set,
-    Solution.solutionindex_set,
-    Toolbox.toolboxindex_set,
     Signature.problemsignature_set,
     Signature.toolboxsignature_set,
     Signature.solutionsignature_set,

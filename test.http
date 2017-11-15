@@ -119,3 +119,6 @@ GET http://localhost:5000/problems/5
 
 # Get a problem to sign
 GET http://localhost:5000/toolboxes/4
+
+# Searching
+GET http://localhost:5000/search?search=escript

@@ -9,7 +9,8 @@ from peewee import BooleanField, CharField, DateTimeField, \
     TextField, Model
 # Use the ext database to get FTS support
 # from peewee import SqliteDatabase
-from playhouse.sqlite_ext import FTSModel, SqliteExtDatabase
+from playhouse.sqlite_ext import FTSModel, SqliteExtDatabase, \
+    SearchField
 from flask_security import UserMixin, RoleMixin, current_user
 from sssc import api
 from .app import app
@@ -47,18 +48,38 @@ RUNTIME_CHOICES = (('python2', 'Latest Python 2.x'),
 resource_hash = getattr(hashlib, app.config['RESOURCE_HASH_FUNCTION'])
 
 
-def text_search(text):
+def text_search(text, latest_only=True):
     """Search for entries that match text.
 
-    Returns a list of entries that matched text.
+    Returns a list of entries that matched text. By default only the latest
+    versions that match are returned. If latest_only is False then all matching
+    versions will be returned.
 
     """
-    matches = [r.problem for r in
-               ProblemIndex.select().where(ProblemIndex.match(text))]
-    matches.extend([r.solution for r in
-                    SolutionIndex.select().where(SolutionIndex.match(text))])
-    matches.extend([r.toolbox for r in
-                    ToolboxIndex.select().where(ToolboxIndex.match(text))])
+    def constraint(cls, index):
+        c = index.match(text)
+        if latest_only:
+            c = c & cls.latest.is_null()
+        return c
+
+    matches = list(Problem
+                   .select()
+                   .join(ProblemIndex,
+                         on=(Problem.id == ProblemIndex.docid))
+                   .where(constraint(Problem, ProblemIndex))
+                   .order_by(ProblemIndex.bm25()))
+    matches.extend(Toolbox
+                   .select()
+                   .join(ToolboxIndex,
+                         on=(Toolbox.id == ToolboxIndex.docid))
+                   .where(constraint(Toolbox, ToolboxIndex))
+                   .order_by(ToolboxIndex.bm25()))
+    matches.extend(Solution
+                   .select()
+                   .join(SolutionIndex,
+                         on=(Solution.id == SolutionIndex.docid))
+                   .where(constraint(Solution, SolutionIndex))
+                   .order_by(SolutionIndex.bm25()))
     return matches
 
 
@@ -692,8 +713,8 @@ class SolutionReview(BaseModel):
 
 
 class BaseIndexModel(FTSModel):
-    name = TextField()
-    description = TextField()
+    name = SearchField()
+    description = SearchField()
 
     class Meta:
         database = db
@@ -701,17 +722,17 @@ class BaseIndexModel(FTSModel):
 
 class ProblemIndex(BaseIndexModel):
     """Store text content from other entries for searching."""
-    problem = ForeignKeyField(Problem)
+    pass
 
 
 class SolutionIndex(BaseIndexModel):
     """Store text content from other entries for searching."""
-    solution = ForeignKeyField(Solution)
+    pass
 
 
 class ToolboxIndex(BaseIndexModel):
     """Store text content from other entries for searching."""
-    toolbox = ForeignKeyField(Toolbox)
+    pass
 
 
 def entry_type(entry):
@@ -724,9 +745,9 @@ def index_entry(entry):
     cls = getattr(importlib.import_module(__name__),
                   et + 'Index')
     if cls:
-        obj = cls(name=entry.name, description=entry.description)
-        field = et.lower()
-        setattr(obj, field, entry)
+        obj = cls(name=entry.name,
+                  description=entry.description,
+                  docid=entry.id)
         obj.save()
 
 
@@ -750,3 +771,18 @@ def drop_tables(db):
     """Drop the model tables."""
     db.drop_tables(_INDEX_TABLES, safe=True)
     db.drop_tables(_TABLES, safe=True)
+
+
+def update_index():
+    """Update the text index for the current database."""
+    db.drop_tables(_INDEX_TABLES, safe=True)
+    db.create_tables(_INDEX_TABLES)
+    for cls, index in [(Problem, ProblemIndex),
+                       (Toolbox, ToolboxIndex),
+                       (Solution, SolutionIndex)]:
+        records = [
+            {index.docid: t[0], index.name: t[1], index.description: t[2]}
+            for t in cls.select(cls.id, cls.name, cls.description).tuples()
+        ]
+        with db.atomic():
+            index.insert_many(records).execute()
