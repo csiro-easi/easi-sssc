@@ -8,15 +8,15 @@ from flask_admin.form import BaseForm
 from flask_admin.model.template import macro
 from flask_security import current_user
 from wtforms import fields, widgets
-from app import app
-from security import security, is_admin, is_user, PublishEntryPermission
-from models import Problem, Solution, Toolbox, User, UserRoles, \
+from sssc.app import app
+from sssc.security import security, is_admin, is_user, PublishEntryPermission
+from sssc.models import Problem, Solution, Toolbox, User, UserRoles, \
     SolutionDependency, ToolboxDependency, \
     SolutionImage, ToolboxImage, \
     SolutionVar, ToolboxVar, JsonField, Entry, \
     ProblemTag, ToolboxTag, SolutionTag
-from signatures import hash_entry
-from views import jsonldify, model_to_dict
+from sssc.signatures import hash_entry
+from sssc.views import jsonldify, model_to_dict
 
 admin = Admin(app, template_mode='bootstrap3')
 

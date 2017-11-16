@@ -7,8 +7,8 @@ from flask_security.forms import Required
 from functools import partial
 import os
 from wtforms import StringField
-from app import app
-from models import db, User, Role, UserRoles
+from sssc.app import app
+from sssc.models import db, User, Role, UserRoles
 
 
 DEFAULT_PWD_LENGTH = 13

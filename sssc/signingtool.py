@@ -3,7 +3,7 @@ from datetime import datetime
 from rsa import PrivateKey
 import rsa
 import requests
-from signatures import canonical_form, hash_canonical_entry
+from sssc.signatures import canonical_form, hash_canonical_entry
 import json
 import base64
 

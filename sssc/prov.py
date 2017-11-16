@@ -1,5 +1,5 @@
 from rdflib import BNode, Literal, URIRef, RDF
-from namespaces import PROV, SSSC
+from sssc.namespaces import PROV, SSSC
 
 
 def add_prov_derivation(g, subject, entity):
