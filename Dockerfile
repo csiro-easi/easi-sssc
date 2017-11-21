@@ -24,6 +24,9 @@ VOLUME /var/lib/scm
 # Finally copy the app files into place
 COPY . /app/
 
+# Run the package install to create an 'sssc' package
+RUN python /app/setup.py develop
+
 # Don't run the dev server by default! Let supervisord/nginx/uwsgi do the work.
 # For debugging, run the image and pass the commandline "python main.py".
 # ENTRYPOINT ["python"]
