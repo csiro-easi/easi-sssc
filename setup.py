@@ -4,7 +4,7 @@ setup(
     name='sssc',
     version='1.0.0',    # TODO: Proper version
     url='https://bitbucket.csiro.au/projects/SSSC/repos/sssc',
-    licesnse='CSIRO',   # TODO: License?
+    license='CSIRO',   # TODO: License?
     classifiers=[   # https://pypi.python.org/pypi?%3Aaction=list_classifiers
         'Development Status :: 6 - Mature',
         'Intended Audience :: Developers',
