@@ -22,7 +22,8 @@ EXPOSE 80 443
 VOLUME /var/lib/scm
 
 # Finally copy the app files into place
-COPY . /app/
+COPY sssc /app/sssc/
+COPY setup.py /app/
 
 # Run the package install to create an 'sssc' package
 RUN python /app/setup.py develop
