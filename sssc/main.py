@@ -1,8 +1,6 @@
 import click
-from sssc.app import app
-import sssc.admin
-from sssc.bootstrap import bootstrap
-import sssc.views
+from sssc import app
+from sssc import bootstrap
 import argparse
 
 
@@ -20,7 +18,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.bootstrap:
-        from .bootstrap import bootstrap
         bootstrap()
 
     # Run the server

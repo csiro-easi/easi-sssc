@@ -68,5 +68,3 @@ def get_exposed(x, handler=None, **kwargs):
             exposed[apiname] = value
 
     return exposed
-
-

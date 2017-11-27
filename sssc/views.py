@@ -15,23 +15,23 @@ from urllib.parse import parse_qs, urlparse
 from werkzeug.exceptions import InternalServerError, NotAcceptable
 from werkzeug.routing import RequestRedirect, MethodNotAllowed, NotFound
 
-from sssc.api import get_exposed
-from sssc.app import app
-import sssc.models
-from sssc.models import db, Toolbox, Entry, Problem, Solution, text_search, \
+from .api import get_exposed
+from .app import app
+from sssc import models
+from .models import db, Toolbox, Entry, Problem, Solution, text_search, \
     is_latest, is_unpublished, User, clone_model, entry_type, \
     License, BaseModel, Role, Dependency, Signature, PublicKey, \
     ProblemSignature, ToolboxSignature, SolutionSignature, Review, \
     SolutionDependency, SolutionImage, SolutionTag, \
     ToolboxDependency, ToolboxImage, ToolboxTag, \
     UploadedResource
-from sssc.namespaces import PROV, SSSC, rdf_graph
-from sssc.prov import add_prov_dependency, add_prov_derivation
-from sssc.security import is_admin, EditEntryPermission, PublishEntryPermission, \
+from .namespaces import PROV, SSSC, rdf_graph
+from .prov import add_prov_dependency, add_prov_derivation
+from .security import is_admin, EditEntryPermission, PublishEntryPermission, \
     ViewUnpublishedPermission, EditResourcePermission, \
     PublishResourcePermission, refresh_current_permissions
-from sssc.signatures import verify_signature
-from sssc.uploads import allowed_file, save_attachment, delete_upload
+from .signatures import verify_signature
+from .uploads import allowed_file, save_attachment, delete_upload
 
 site = Blueprint('site', __name__, template_folder='templates')
 
@@ -458,7 +458,7 @@ def save_review(data, entry):
     rel_class_name = "{}Review".format(entry_type(entry))
     try:
         # Make sure we have the rel class
-        rel_class = getattr(sssc.models, rel_class_name)
+        rel_class = getattr(models, rel_class_name)
         if not rel_class:
             raise ValueError(
                 '{} is not a valid entry-review relation class name.'

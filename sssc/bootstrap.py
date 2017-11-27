@@ -1,6 +1,6 @@
 # coding: utf-8
 
-from sssc.models import db, Problem, Solution, Toolbox, create_database, drop_tables, \
+from .models import db, Problem, Solution, Toolbox, create_database, drop_tables, \
     index_entry, License
 
 

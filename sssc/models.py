@@ -11,8 +11,8 @@ from peewee import BooleanField, CharField, DateTimeField, \
 # from peewee import SqliteDatabase
 from playhouse.sqlite_ext import FTSModel, SqliteExtDatabase
 from flask_security import UserMixin, RoleMixin, current_user
-import sssc.api
-from sssc.app import app
+from sssc import api
+from .app import app
 
 # Valid source repositories
 SOURCE_TYPES = (('git', 'GIT repository'),
@@ -275,7 +275,7 @@ class Entry(BaseModel):
         lambda self: self.id if self.latest is None else self.latest.id
     )
 
-    @sssc.api.expose(sense='child')
+    @api.expose(sense='child')
     @property
     def reviews(self):
         """Return reviews for this Entry."""
@@ -610,7 +610,7 @@ class Review(BaseModel):
     created_at = DateTimeField(default=datetime.now)
 
     @property
-    @sssc.api.expose(sense='parent')
+    @api.expose(sense='parent')
     def entry(self):
         """Return the entry this review is for."""
         rel = None

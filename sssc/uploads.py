@@ -1,8 +1,8 @@
 from pathlib import PurePath, Path
 from werkzeug.utils import secure_filename
 
-from sssc.app import app
-import sssc.models
+from .app import app
+from sssc import models
 
 
 def allowed_file(filename):
@@ -31,7 +31,7 @@ def save_attachment(user, file, name=None):
 
     # Create the upload object with the default filename first, so we can use
     # the id to ensure the final filename is unique.
-    upload = sssc.models.UploadedResource.create(filename=filename,
+    upload = models.UploadedResource.create(filename=filename,
                                                 name=name,
                                                 user=user.id)
 
