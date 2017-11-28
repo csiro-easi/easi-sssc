@@ -3,3 +3,4 @@ __pycache__/
 .idea/
 *.pyc
 flycheck_models.py
+/sssc.egg-info

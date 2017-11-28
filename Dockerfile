@@ -16,13 +16,19 @@ EXPOSE 80 443
 # Use a volume for the database file and uploads
 VOLUME /var/lib/scm
 
-# Finally copy the app files into place
-COPY sssc /app/sssc/
-COPY setup.py /app/
+# Make sure we have an up to date pip
+RUN pip install --upgrade pip wheel
 
-# Install requirements
-RUN pip install --upgrade pip && \
-    pip install -e .
+# Install frozen requirements before copying app files to avoid busting the
+# cache when the sources change.
+COPY requirements.txt /app/
+RUN pip install -r requirements.txt
+
+# Finally copy the app files into place, and install the package
+COPY setup.py /app/
+COPY MANIFEST.in /app/
+COPY sssc /app/sssc/
+RUN pip install .
 
 # Flask App
 ENV FLASK_APP=sssc

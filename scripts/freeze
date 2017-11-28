@@ -1,0 +1,18 @@
+#!/bin/bash
+#
+# Freeze dependencies for output in requirements.txt.
+#
+# Removes the sssc package from the list of dependencies if present. Also strips
+# pkg-resources if present, which is only introduced due to a bug in Ubuntu (see
+# https://bugs.launchpad.net/ubuntu/+source/python-pip/+bug/1635463).
+#
+# After updating the project dependencies, including version upgrades and/or
+# transitive dependencies, regenerate the requirements.txt file with frozen
+# versions by running this script.
+#
+
+project_dir=$(dirname "$0")/..
+
+echo Freezing dependencies into "${project_dir}/requirements.txt"
+
+pip freeze | grep -v sssc | grep -v "pkg-resources" > "${project_dir}/requirements.txt"
