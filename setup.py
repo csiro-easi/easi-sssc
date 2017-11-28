@@ -40,6 +40,7 @@ setup(
         'requests',
         'rsa',
         'simplejson',
+        'click'
     ],
     python_requires='>=3',
 )

@@ -18,7 +18,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.bootstrap:
-        bootstrap()
+        bootstrap.bootstrap()
 
     # Run the server
     app.run(debug=True, host="0.0.0.0", threaded=True)
