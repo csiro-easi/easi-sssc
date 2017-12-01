@@ -4,3 +4,6 @@ __pycache__/
 *.pyc
 flycheck_models.py
 /sssc.egg-info
+environment.env
+dev.config
+
