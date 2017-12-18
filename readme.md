@@ -2,6 +2,8 @@
 
 * Python 3
 
+All python dependencies are described in setup.py, in the install_requires entry. See the [Development](#development) section below for details on managing dependency changes.
+
 # Quickstart
 
 To run a development server you need to install the python dependencies
@@ -9,7 +11,7 @@ To run a development server you need to install the python dependencies
 they are executed in the working directory.
 
 ```
-pip install -r requirements.txt
+pip install -e .
 ```
 
 You can run the development server using the flask command line client. First set up the environment to tell flask which application to run, and that we want to use the debug mode that enables code reloading.
@@ -62,3 +64,14 @@ It's also possible to run (dev or prod) the container in the background by appen
 ```
 docker-compose logs -f
 ```
+
+# Development
+
+After updating dependencies, or upgrading dependencies to new versions, you need to regenerate the requirements.txt file with the current set of frozen dependencies. This ensures that other builds and deployments can be made using the precise versions of packages that you tested.
+
+Use the command below in the project directory to generate the new requirements.txt. Make sure to update the frozen dependencies when pushing changes to the repository, if required.
+
+```
+scripts/freeze
+```
+
