@@ -271,6 +271,13 @@ _default_exclude = set([
     User.uploads
 ])
 
+# Map some property names in the API
+_default_property_api_names = {
+    'deps': 'dependencies'
+}
+def _property_api_name(p):
+    return _default_property_api_names.get(p, p)
+
 
 def _clone_set(s, default=None):
     if s:
@@ -329,7 +336,7 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
                                include_nulls=include_nulls,
                                include_ids=include_ids)
                  for x in v]
-        data[k] = v
+        data[_property_api_name(k)] = v
 
     # Iterate over fields of model
     foreign = set(model._meta.rel.values())
@@ -361,7 +368,7 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
                     f_data = model_url(rel_obj)
 
         if include_nulls or f_data is not None:
-            data[f.name] = f_data
+            data[_property_api_name(f.name)] = f_data
 
     # Iterate over reverse relations, and embed the data
     model_class = type(model)
@@ -392,7 +399,7 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
                     include_nulls=include_nulls,
                     include_ids=include_ids
                 ))
-        data[related_name] = accum
+        data[_property_api_name(related_name)] = accum
 
     # Add any extra fields
     if extra:
@@ -418,7 +425,7 @@ def model_to_dict(model, seen=None, exclude=None, extra=None, refs=None,
                                               max_depth=max_depth - 1,
                                               include_nulls=include_nulls,
                                               include_ids=include_ids)
-                data[prop] = value
+                data[_property_api_name(prop)] = value
 
     return data
 

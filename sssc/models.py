@@ -285,6 +285,7 @@ class Entry(BaseModel):
     version -- Version number for this Entry
     entry_hash -- Auto-generated hash of entry content
     published -- Flag indicating visibility status
+    icon -- URL of an image suitable for use as an icon
 
     """
     id = PrimaryKeyField()
@@ -294,6 +295,7 @@ class Entry(BaseModel):
     version = IntegerField(default=1)
     entry_hash = CharField(null=True)
     published = BooleanField(default=app.config['PUBLISH_DEFAULT'])
+    icon = CharField(null=True)
 
     entry_id = property(
         lambda self: self.id if self.latest is None else self.latest.id
