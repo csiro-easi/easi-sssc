@@ -1,25 +1,43 @@
-Flask==0.12.1  # BSD
+aniso8601==1.3.0  # License :: OSI Approved :: BSD License
+Babel==2.5.1  # BSD
+bcrypt==3.1.4  # Apache License, Version 2.0
+blinker==1.4  # MIT License
+certifi==2017.11.5  # MPL-2.0
+cffi==1.11.2  # MIT
+chardet==3.0.4  # LGPL
+click==6.7  # License :: OSI Approved :: BSD License
+Flask==0.12.2  # BSD
 Flask-Admin==1.5.0  # BSD
-Flask-Cors==3.0.2  # MIT
-Flask-Login==0.3.2  # MIT
-Flask-Script==2.0.5  # BSD
-Flask-Security==1.7.5  # MIT
+Flask-BabelEx==0.9.3  # BSD
+Flask-Cors==3.0.3  # MIT
+Flask-Login==0.4.1  # MIT
+Flask-Mail==0.9.1  # BSD
+Flask-Principal==0.4.0  # MIT
+Flask-Script==2.0.6  # BSD
+Flask-Security==3.0.0  # MIT
 Flask-WTF==0.14.2  # BSD
-Jinja2==2.9.6  # BSD
-Markdown==2.6.8  # BSD License
-MarkupSafe==1.0  # BSD
-WTForms==2.1  # BSD
-Werkzeug==0.12.1  # BSD
-aniso8601==1.2.0  # License :: OSI Approved :: BSD License
+idna==2.6  # BSD-like
+isodate==0.6.0  # BSD
 itsdangerous==0.24  # License :: OSI Approved :: BSD License
+Jinja2==2.10  # BSD
+Markdown==2.6.9  # BSD License
+MarkupSafe==1.0  # BSD
 mccabe==0.6.1  # Expat license
-peewee==2.9.2  # License :: OSI Approved :: MIT License
-pytz==2017.2  # MIT
-six==1.10.0  # MIT
-wtf-peewee==0.2.6  # MIT
+passlib==1.7.1  # BSD
+peewee==2.10.2  # License :: OSI Approved :: MIT License
+pyasn1==0.4.2  # BSD
+pycparser==2.18  # BSD
+pyparsing==2.2.0  # MIT License
+python-dateutil==2.6.1  # Simplified BSD
+pytz==2017.3  # MIT
 rdflib==4.2.2  # https://raw.github.com/RDFLib/rdflib/master/LICENSE
 rdflib-jsonld==0.4.0  # BSD
-bcrypt==3.1.3  # Apache License, Version 2.0
-requests==2.13.0  # Apache 2.0
+requests==2.18.4  # Apache 2.0
 rsa==3.4.2  # ASL 2
-simplejson==3.10.0  # MIT License
+simplejson==3.13.2  # MIT License
+six==1.11.0  # MIT
+speaklater==1.3  # License :: OSI Approved :: BSD License
+urllib3==1.22  # MIT
+Werkzeug==0.12.2  # BSD
+wtf-peewee==0.2.6  # MIT
+WTForms==2.1  # BSD

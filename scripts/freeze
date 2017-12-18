@@ -11,8 +11,14 @@
 # versions by running this script.
 #
 
-project_dir=$(dirname "$0")/..
+script_dir=$(dirname "$0")
+project_dir=$script_dir/..
+requirements="${project_dir}/requirements.txt"
 
 echo Freezing dependencies into "${project_dir}/requirements.txt"
 
-pip freeze | grep -v sssc | grep -v "pkg-resources" > "${project_dir}/requirements.txt"
+pip freeze | grep -v sssc | grep -v "pkg-resources" > $requirements
+
+echo Inserting license info into requirements.txt
+
+"${script_dir}/pylicense.py" $requirements
