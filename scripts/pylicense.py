@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import xmlrpc.client
 #
 # From: https://github.com/thedataincubator/pylicense
