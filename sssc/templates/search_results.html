@@ -9,14 +9,37 @@
 {% block content %}
 <p class="lead">Search string: {{ search }}</p>
 
-{% if results|length == 0 %}
+<h3>Problems</h3>
+{% with %}
+{% set entries = results.problems %}
+{% set include_type = True %}
+{% if entries|length == 0 %}
 <p>No matches</p>
 {% else %}
-{% with %}
-{% set entries = results %}
-{% set include_type = True %}
 {% include 'entries/results.html' %}
+{% endif  %}
+{% endwith %}
+
+<h3>Toolboxes</h3>
+{% with %}
+{% set entries = results.toolboxes %}
+{% set include_type = True %}
+{% if entries|length == 0 %}
+<p>No matches</p>
+{% else %}
+{% include 'entries/results.html' %}
+{% endif %}
+{% endwith %}
+
+<h3>Solutions</h3>
+{% with %}
+{% set entries = results.solutions %}
+{% set include_type = True %}
+{% if entries|length == 0 %}
+<p>No matches</p>
+{% else %}
+{% include 'entries/results.html' %}
+{% endif %}
 {% endwith %}
 </div>
-{% endif  %}
 {% endblock %}
