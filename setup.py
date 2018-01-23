@@ -42,5 +42,5 @@ setup(
         'simplejson',
         'click'
     ],
-    python_requires='>=3',
+    python_requires='>=3.6',
 )
