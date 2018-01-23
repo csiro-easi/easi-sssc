@@ -575,6 +575,41 @@ class SolutionImage(Image):
     solution = ForeignKeyField(Solution, related_name="images")
 
 
+class Application(Entry):
+    """An application that can implement a Solution.
+
+    This is a generic concept, used to represent both bespoke applications that
+    are the implementation of a specific Solution and applications that are
+    clients for the SSSC and are able to run arbitrary solutions (e.g. the
+    Virtual Geophysics Laboratory).
+
+    homepage -- The URL to the home or landing page for the application, which
+    could open the app itself, be the place to download it, or otherwise
+    provide information about how to access it.
+
+    url_template -- Template that can be used to invoke a web-based application
+    with a specific solution. This should be a string containing a single
+    instance of the substring '%s' where the solution URI should be
+    substituted. Note that the url template should not be url encoded before
+    being stored.
+
+    """
+    homepage = CharField(
+        help_text='URL to the home/landing page for the application.'
+    ),
+    url_template = CharField(
+        null=True,
+        help_text='URL template for invoking app with a specific solution'
+    )
+    latest = ForeignKeyField('self', null=True, related_name='versions')
+
+
+class ApplicationSolution(BaseModel):
+    """Many-to-many relation between Applications and Solutions."""
+    app = ForeignKeyField(Application, related_name='solutions')
+    solution = ForeignKeyField(Solution)
+
+
 class JsonField(CharField):
     """Store JSON strings."""
     def db_value(self, value):
@@ -762,7 +797,7 @@ _TABLES = [User, Role, UserRoles, License, Problem, Toolbox, Signature,
            ToolboxImage, ProblemSignature, ToolboxSignature, SolutionSignature,
            ProblemTag, ToolboxTag, SolutionTag,
            Review, ProblemReview, SolutionReview, ToolboxReview,
-           UploadedResource]
+           Application, ApplicationSolution, UploadedResource]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 
 
