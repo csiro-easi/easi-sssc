@@ -33,6 +33,11 @@ RUN pip install .
 # Flask App
 ENV FLASK_APP=sssc
 
+# Make the flask development entrypoint script available, but not the default
+# option.
+COPY scripts/flask_dev_entrypoint /usr/local/bin
+RUN chmod +x /usr/local/bin/flask_dev_entrypoint
+
 # Run the package install to create an 'sssc' package
 #RUN python /app/setup.py develop
 

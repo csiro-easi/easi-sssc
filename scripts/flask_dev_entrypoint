@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# Enter the local app directory and make a dev install of the contents
+cd /app
+pip install -e .
+
+# Run flask with the commands passed to this script
+flask "$@"
