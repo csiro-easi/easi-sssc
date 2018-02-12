@@ -168,6 +168,9 @@ class Role(BaseModel, RoleMixin):
     def __unicode__(self):
         return self.name
 
+    def __str__(self):
+        return self.name
+
 
 class User(BaseModel, UserMixin):
     """Catalogue user."""
@@ -194,6 +197,9 @@ class User(BaseModel, UserMixin):
             return None
 
     def __unicode__(self):
+        return self.name
+
+    def __str__(self):
         return self.name
 
 
@@ -391,6 +397,9 @@ class Entry(BaseModel):
     def __unicode__(self):
         return "entry ({})".format(self.name)
 
+    def __str__(self):
+        return "entry ({})".format(self.name)
+
 
 class UploadedResource(BaseModel):
     """Store, and serve, an uploaded file."""
@@ -413,6 +422,9 @@ class License(BaseModel):
     def __unicode__(self):
         return self.name if self.name else self.url
 
+    def __str__(self):
+        return self.name if self.name else self.url
+
 
 class Dependency(BaseModel):
     """Dependency on external python packages or a puppet module.
@@ -430,6 +442,9 @@ class Dependency(BaseModel):
     repository = CharField(null=True)
 
     def __unicode__(self):
+        return "({}) {}".format(self.type, self.identifier)
+
+    def __str__(self):
         return "({}) {}".format(self.type, self.identifier)
 
 
@@ -469,6 +484,9 @@ class Source(BaseModel):
     setup = TextField(null=True)
 
     def __unicode__(self):
+        return "source ({}, {})".format(self.type, self.url)
+
+    def __str__(self):
         return "source ({}, {})".format(self.type, self.url)
 
 
@@ -594,6 +612,7 @@ class Application(Entry):
     being stored.
 
     """
+    author = ForeignKeyField(User, related_name='un')
     homepage = CharField(
         help_text='URL to the home/landing page for the application.'
     ),
@@ -650,6 +669,9 @@ class Var(BaseModel):
     values = JsonField(null=True)
 
     def __unicode__(self):
+        return "var {} ({})".format(self.name, self.type)
+
+    def __str__(self):
         return "var {} ({})".format(self.name, self.type)
 
 

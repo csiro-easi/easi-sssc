@@ -122,10 +122,19 @@ class EntryModelView(ProtectedModelView):
 
     # Truncate long descriptions in the list view. Use a macro rather than
     # truncating here so the full value is available as a tooltip.
-    #
+    def long_text_formatter(view, context, model, name):
+        data = getattr(model, name, '')
+        val = (data[:56] + '...') if len(data) > 56 else data
+        from markupsafe import Markup
+        return Markup(
+            u"<p title='%s'>%s</p>" % (data, val)
+        )
+
     # Also, don't clog up display with microsecond creation times.
     column_formatters = dict(
-        description=macro('render_long_text'),
+        description=long_text_formatter,
+        entry_hash=long_text_formatter,
+        template_hash=long_text_formatter,
         created_at=lambda v, c, m, p: m.created_at.replace(microsecond=0).isoformat(' ')
     )
 
