@@ -612,7 +612,7 @@ class Application(Entry):
     being stored.
 
     """
-    author = ForeignKeyField(User, related_name='un')
+    author = ForeignKeyField(User, related_name='applications')
     homepage = CharField(
         help_text='URL to the home/landing page for the application.'
     ),
