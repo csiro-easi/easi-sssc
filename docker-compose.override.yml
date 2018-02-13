@@ -11,5 +11,5 @@ services:
       - DEBUG=true
       - SSSC_CONFIG=${SSSC_CONFIG-/var/lib/scm/scm.config}
       - FLASK_DEBUG=1
-    entrypoint: flask
+    entrypoint: flask_dev_entrypoint
     command: run --with-threads --host 0.0.0.0

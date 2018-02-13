@@ -168,6 +168,9 @@ class Role(BaseModel, RoleMixin):
     def __unicode__(self):
         return self.name
 
+    def __str__(self):
+        return self.name
+
 
 class User(BaseModel, UserMixin):
     """Catalogue user."""
@@ -194,6 +197,9 @@ class User(BaseModel, UserMixin):
             return None
 
     def __unicode__(self):
+        return self.name
+
+    def __str__(self):
         return self.name
 
 
@@ -391,6 +397,9 @@ class Entry(BaseModel):
     def __unicode__(self):
         return "entry ({})".format(self.name)
 
+    def __str__(self):
+        return "entry ({})".format(self.name)
+
 
 class UploadedResource(BaseModel):
     """Store, and serve, an uploaded file."""
@@ -413,6 +422,9 @@ class License(BaseModel):
     def __unicode__(self):
         return self.name if self.name else self.url
 
+    def __str__(self):
+        return self.name if self.name else self.url
+
 
 class Dependency(BaseModel):
     """Dependency on external python packages or a puppet module.
@@ -430,6 +442,9 @@ class Dependency(BaseModel):
     repository = CharField(null=True)
 
     def __unicode__(self):
+        return "({}) {}".format(self.type, self.identifier)
+
+    def __str__(self):
         return "({}) {}".format(self.type, self.identifier)
 
 
@@ -469,6 +484,9 @@ class Source(BaseModel):
     setup = TextField(null=True)
 
     def __unicode__(self):
+        return "source ({}, {})".format(self.type, self.url)
+
+    def __str__(self):
         return "source ({}, {})".format(self.type, self.url)
 
 
@@ -575,6 +593,42 @@ class SolutionImage(Image):
     solution = ForeignKeyField(Solution, related_name="images")
 
 
+class Application(Entry):
+    """An application that can implement a Solution.
+
+    This is a generic concept, used to represent both bespoke applications that
+    are the implementation of a specific Solution and applications that are
+    clients for the SSSC and are able to run arbitrary solutions (e.g. the
+    Virtual Geophysics Laboratory).
+
+    homepage -- The URL to the home or landing page for the application, which
+    could open the app itself, be the place to download it, or otherwise
+    provide information about how to access it.
+
+    url_template -- Template that can be used to invoke a web-based application
+    with a specific solution. This should be a string containing a single
+    instance of the substring '%s' where the solution URI should be
+    substituted. Note that the url template should not be url encoded before
+    being stored.
+
+    """
+    author = ForeignKeyField(User, related_name='applications')
+    homepage = CharField(
+        help_text='URL to the home/landing page for the application.'
+    ),
+    url_template = CharField(
+        null=True,
+        help_text='URL template for invoking app with a specific solution'
+    )
+    latest = ForeignKeyField('self', null=True, related_name='versions')
+
+
+class ApplicationSolution(BaseModel):
+    """Many-to-many relation between Applications and Solutions."""
+    app = ForeignKeyField(Application, related_name='solutions')
+    solution = ForeignKeyField(Solution)
+
+
 class JsonField(CharField):
     """Store JSON strings."""
     def db_value(self, value):
@@ -615,6 +669,9 @@ class Var(BaseModel):
     values = JsonField(null=True)
 
     def __unicode__(self):
+        return "var {} ({})".format(self.name, self.type)
+
+    def __str__(self):
         return "var {} ({})".format(self.name, self.type)
 
 
@@ -762,7 +819,7 @@ _TABLES = [User, Role, UserRoles, License, Problem, Toolbox, Signature,
            ToolboxImage, ProblemSignature, ToolboxSignature, SolutionSignature,
            ProblemTag, ToolboxTag, SolutionTag,
            Review, ProblemReview, SolutionReview, ToolboxReview,
-           UploadedResource]
+           Application, ApplicationSolution, UploadedResource]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
 
 

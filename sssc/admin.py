@@ -14,7 +14,8 @@ from .models import Problem, Solution, Toolbox, User, UserRoles, \
     SolutionDependency, ToolboxDependency, \
     SolutionImage, ToolboxImage, \
     SolutionVar, ToolboxVar, JsonField, Entry, \
-    ProblemTag, ToolboxTag, SolutionTag
+    ProblemTag, ToolboxTag, SolutionTag, \
+    Application, ApplicationSolution
 from .signatures import hash_entry
 from .views import jsonldify, model_to_dict
 
@@ -121,10 +122,19 @@ class EntryModelView(ProtectedModelView):
 
     # Truncate long descriptions in the list view. Use a macro rather than
     # truncating here so the full value is available as a tooltip.
-    #
+    def long_text_formatter(view, context, model, name):
+        data = getattr(model, name, '')
+        val = (data[:56] + '...') if len(data) > 56 else data
+        from markupsafe import Markup
+        return Markup(
+            u"<p title='%s'>%s</p>" % (data, val)
+        )
+
     # Also, don't clog up display with microsecond creation times.
     column_formatters = dict(
-        description=macro('render_long_text'),
+        description=long_text_formatter,
+        entry_hash=long_text_formatter,
+        template_hash=long_text_formatter,
         created_at=lambda v, c, m, p: m.created_at.replace(microsecond=0).isoformat(' ')
     )
 
@@ -307,11 +317,16 @@ class ToolboxAdmin(EntryModelView):
     )
 
 
+class ApplicationAdmin(EntryModelView):
+    inline_models = (ApplicationSolution,)
+
+
 admin.add_view(UserAdmin(User))
 # admin.add_view(UserProfile(User, endpoint='profile'))
 admin.add_view(ProblemAdmin(Problem))
 admin.add_view(SolutionAdmin(Solution))
 admin.add_view(ToolboxAdmin(Toolbox))
+admin.add_view(ApplicationAdmin(Application))
 
 
 # Integrate flask-admin and flask-security
