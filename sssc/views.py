@@ -24,7 +24,7 @@ from .models import db, Toolbox, Entry, Problem, Solution, text_search, \
     ProblemSignature, ToolboxSignature, SolutionSignature, Review, \
     SolutionDependency, SolutionImage, SolutionTag, \
     ToolboxDependency, ToolboxImage, ToolboxTag, \
-    UploadedResource
+    UploadedResource, Application, ApplicationSignature
 from .namespaces import PROV, SSSC, rdf_graph
 from .prov import add_prov_dependency, add_prov_derivation
 from .security import is_admin, EditEntryPermission, PublishEntryPermission, \
@@ -1140,6 +1140,15 @@ class ProblemView(EntryView):
         return super().semantic_types() + [SSSC.Problem]
 
 
+class ApplicationView(EntryView):
+    detail_template = 'entries/application_detail.html'
+    model = Application
+    entries_key = 'applications'
+
+    def semantic_types(self):
+        return super().semantic_types() + [SSSC.Application]
+
+
 class SolutionView(EntryView):
     detail_template = 'entries/solution_detail.html'
     model = Solution
@@ -1609,12 +1618,15 @@ register_api(Toolbox, ToolboxView, 'toolbox_api', '/toolboxes/', pk='entry_id')
 register_api(Problem, ProblemView, 'problem_api', '/problems/', pk='entry_id')
 register_api(Solution, SolutionView, 'solution_api', '/solutions/',
              pk='entry_id')
+register_api(Application, ApplicationView, 'application_api', '/applications/',
+             pk='entry_id')
 register_api(User, UserView, 'user_api', '/users/', pk='user_id')
 register_api(License, LicenseView, 'license_api', '/licenses/',
              pk='license_id')
 register_api([ProblemSignature,
               ToolboxSignature,
               SolutionSignature,
+              ApplicationSignature,
               Signature],
              SignatureView, 'signature_api', '/signatures/', pk='signature_id')
 register_api(UploadedResource, UploadView, 'uploads_api', '/uploads/',

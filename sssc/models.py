@@ -247,6 +247,8 @@ class Signature(BaseModel):
             return self.toolboxsignature_set[0]
         if self.solutionsignature_set.count() == 1:
             return self.solutionsignature_set[0]
+        if self.applicationsignature_set.count() == 1:
+            return self.applicationsignature_set[0]
         return None
 
 
@@ -623,6 +625,13 @@ class Application(Entry):
     latest = ForeignKeyField('self', null=True, related_name='versions')
 
 
+class ApplicationSignature(BaseModel):
+    """Signatures for Applications."""
+    application = ForeignKeyField(Application, related_name="signatures")
+    signature = ForeignKeyField(Signature, unique=True, on_delete='CASCADE')
+    entry = property(lambda self: self.application)
+
+
 class ApplicationSolution(BaseModel):
     """Many-to-many relation between Applications and Solutions."""
     app = ForeignKeyField(Application, related_name='solutions')
@@ -817,7 +826,7 @@ _TABLES = [User, Role, UserRoles, License, Problem, Toolbox, Signature,
            ToolboxDependency, Solution, SolutionDependency, PublicKey,
            ToolboxVar, SolutionVar, Source, SolutionImage,
            ToolboxImage, ProblemSignature, ToolboxSignature, SolutionSignature,
-           ProblemTag, ToolboxTag, SolutionTag,
+           ApplicationSignature, ProblemTag, ToolboxTag, SolutionTag,
            Review, ProblemReview, SolutionReview, ToolboxReview,
            Application, ApplicationSolution, UploadedResource]
 _INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]

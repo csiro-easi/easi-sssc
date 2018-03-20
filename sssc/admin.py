@@ -15,7 +15,7 @@ from .models import Problem, Solution, Toolbox, User, UserRoles, \
     SolutionImage, ToolboxImage, \
     SolutionVar, ToolboxVar, JsonField, Entry, \
     ProblemTag, ToolboxTag, SolutionTag, \
-    Application, ApplicationSolution
+    Application, ApplicationSolution, ApplicationSignature
 from .signatures import hash_entry
 from .views import jsonldify, model_to_dict
 
