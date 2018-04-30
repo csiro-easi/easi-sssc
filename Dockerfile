@@ -27,6 +27,7 @@ RUN pip install -r requirements.txt
 # Finally copy the app files into place, and install the package
 COPY setup.py /app/
 COPY MANIFEST.in /app/
+COPY uwsgi.ini /app/
 COPY sssc /app/sssc/
 RUN pip install .
 
