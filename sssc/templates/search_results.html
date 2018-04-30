@@ -41,5 +41,17 @@
 {% include 'entries/results.html' %}
 {% endif %}
 {% endwith %}
+
+<h3>Applications</h3>
+{% with %}
+{% set entries = results.applications %}
+{% set include_type = True %}
+{% if entries|length == 0 %}
+<p>No matches</p>
+{% else %}
+{% include 'entries/results.html' %}
+{% endif  %}
+{% endwith %}
+
 </div>
 {% endblock %}
