@@ -24,7 +24,7 @@ from .models import db, Toolbox, Entry, Problem, Solution, text_search, \
     ProblemSignature, ToolboxSignature, SolutionSignature, Review, \
     SolutionDependency, SolutionImage, SolutionTag, \
     ToolboxDependency, ToolboxImage, ToolboxTag, \
-    UploadedResource, Application, ApplicationSignature
+    UploadedResource, Application, ApplicationSignature, ApplicationSolution
 from .namespaces import PROV, SSSC, rdf_graph
 from .prov import add_prov_dependency, add_prov_derivation
 from .security import is_admin, EditEntryPermission, PublishEntryPermission, \
@@ -229,6 +229,7 @@ _internal_identifiers = set([
     Problem.id,
     Toolbox.id,
     Solution.id,
+    Application.id,
     License.id,
     Dependency.id,
     PublicKey.id,
@@ -238,7 +239,8 @@ _internal_identifiers = set([
     SolutionTag.id,
     ToolboxDependency.id,
     ToolboxImage.id,
-    ToolboxTag.id
+    ToolboxTag.id,
+    ApplicationSolution.id
 ])
 
 # These fields should usually be returned as refs, not nested
