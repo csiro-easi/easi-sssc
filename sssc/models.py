@@ -62,7 +62,7 @@ def text_search(text, latest_only=True):
             c = c & cls.latest.is_null()
         return c
 
-    results = dict(problems=[], toolboxes=[], solutions=[])
+    results = dict(problems=[], toolboxes=[], solutions=[], applications=[])
 
     if text:
         results["problems"] = (Problem
@@ -83,6 +83,13 @@ def text_search(text, latest_only=True):
                                       on=(Solution.id == SolutionIndex.docid))
                                 .where(constraint(Solution, SolutionIndex))
                                 .order_by(SolutionIndex.bm25()))
+        results["applications"] = (Application
+                               .select()
+                               .join(ApplicationIndex,
+                                     on=(Application.id == ApplicationIndex.docid))
+                               .where(constraint(Application, ApplicationIndex))
+                               .order_by(ApplicationIndex.bm25()))
+
     return results
 
 
@@ -247,6 +254,8 @@ class Signature(BaseModel):
             return self.toolboxsignature_set[0]
         if self.solutionsignature_set.count() == 1:
             return self.solutionsignature_set[0]
+        if self.applicationsignature_set.count() == 1:
+            return self.applicationsignature_set[0]
         return None
 
 
@@ -623,6 +632,13 @@ class Application(Entry):
     latest = ForeignKeyField('self', null=True, related_name='versions')
 
 
+class ApplicationSignature(BaseModel):
+    """Signatures for Applications."""
+    application = ForeignKeyField(Application, related_name="signatures")
+    signature = ForeignKeyField(Signature, unique=True, on_delete='CASCADE')
+    entry = property(lambda self: self.application)
+
+
 class ApplicationSolution(BaseModel):
     """Many-to-many relation between Applications and Solutions."""
     app = ForeignKeyField(Application, related_name='solutions')
@@ -797,6 +813,11 @@ class ToolboxIndex(BaseIndexModel):
     pass
 
 
+class ApplicationIndex(BaseIndexModel):
+    """Store text content from other entries for searching."""
+    pass
+
+
 def entry_type(entry):
     return type(entry).__name__
 
@@ -817,10 +838,10 @@ _TABLES = [User, Role, UserRoles, License, Problem, Toolbox, Signature,
            ToolboxDependency, Solution, SolutionDependency, PublicKey,
            ToolboxVar, SolutionVar, Source, SolutionImage,
            ToolboxImage, ProblemSignature, ToolboxSignature, SolutionSignature,
-           ProblemTag, ToolboxTag, SolutionTag,
+           ApplicationSignature, ProblemTag, ToolboxTag, SolutionTag,
            Review, ProblemReview, SolutionReview, ToolboxReview,
            Application, ApplicationSolution, UploadedResource]
-_INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex]
+_INDEX_TABLES = [ProblemIndex, SolutionIndex, ToolboxIndex, ApplicationIndex]
 
 
 def create_database(db, safe=True):
@@ -841,7 +862,8 @@ def update_index():
     db.create_tables(_INDEX_TABLES)
     for cls, index in [(Problem, ProblemIndex),
                        (Toolbox, ToolboxIndex),
-                       (Solution, SolutionIndex)]:
+                       (Solution, SolutionIndex),
+                       (Application, ApplicationIndex)]:
         records = [
             {index.docid: t[0], index.name: t[1], index.description: t[2]}
             for t in cls.select(cls.id, cls.name, cls.description).tuples()
