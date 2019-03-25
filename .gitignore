@@ -7,3 +7,4 @@ flycheck_models.py
 environment.env
 dev.config
 
+.vscode/settings.json
