@@ -48,7 +48,7 @@ The development build will mount the working directory in the running container,
 Once the image has been built, you can override the default command that is run when starting the container, e.g. for bootstrapping the database on the first run, using the following command.
 
 ```
-docker-compose run --entrypoint python --rm --service-ports web main.py -b
+docker-compose run --entrypoint flask --rm web initdb
 ```
 
 You can run the service in a production mode locally using the following.

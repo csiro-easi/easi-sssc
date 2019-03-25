@@ -13,9 +13,6 @@ COPY nginx.conf /etc/nginx/conf.d/
 # Expose the server ports
 EXPOSE 80 443
 
-# Use a volume for the database file and uploads
-VOLUME /var/lib/scm
-
 # Make sure we have an up to date pip
 RUN pip install --upgrade pip wheel
 
