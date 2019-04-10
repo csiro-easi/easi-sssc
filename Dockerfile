@@ -1,7 +1,7 @@
 # Dockerize the SSSC website
 FROM tiangolo/uwsgi-nginx:python3.6
 
-MAINTAINER Geoff Squire <geoffrey.squire@csiro.au>
+MAINTAINER Robert Woodcock <robert.woodcock@csiro.au>
 
 # Remove any sample app and work in the /app directory
 RUN rm -rf /app
