@@ -1,3 +1,8 @@
+> This repository is no longer maintained here.
+> Further development will likely occur in https://dev.azure.com/csiro-easi/easi-hub.
+
+----
+
 # Dependencies
 
 * Python 3
