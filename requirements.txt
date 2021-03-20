@@ -19,7 +19,7 @@ Flask-WTF==0.14.2  # BSD
 idna==2.6  # BSD-like
 isodate==0.6.0  # BSD
 itsdangerous==0.24  # License :: OSI Approved :: BSD License
-Jinja2==2.10  # BSD
+Jinja2==2.11.3  # BSD
 Markdown==2.6.9  # BSD License
 MarkupSafe==1.0  # BSD
 mccabe==0.6.1  # Expat license
