@@ -9,7 +9,7 @@ click==6.7  # License :: OSI Approved :: BSD License
 Flask==0.12.2  # BSD
 Flask-Admin==1.5.0  # BSD
 Flask-BabelEx==0.9.3  # BSD
-Flask-Cors==3.0.3  # MIT
+Flask-Cors==3.0.9  # MIT
 Flask-Login==0.4.1  # MIT
 Flask-Mail==0.9.1  # BSD
 Flask-Principal==0.4.0  # MIT
