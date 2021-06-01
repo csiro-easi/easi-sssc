@@ -37,7 +37,7 @@ rsa==3.4.2  # ASL 2
 simplejson==3.13.2  # MIT License
 six==1.11.0  # MIT
 speaklater==1.3  # License :: OSI Approved :: BSD License
-urllib3==1.22  # MIT
+urllib3==1.26.5  # MIT
 Werkzeug==0.12.2  # BSD
 wtf-peewee==0.2.6  # MIT
 WTForms==2.1  # BSD
