@@ -1,5 +1,5 @@
 aniso8601==1.3.0  # License :: OSI Approved :: BSD License
-Babel==2.5.1  # BSD
+Babel==2.9.1  # BSD
 bcrypt==3.1.4  # Apache License, Version 2.0
 blinker==1.4  # MIT License
 certifi==2017.11.5  # MPL-2.0
